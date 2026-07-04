@@ -7,6 +7,7 @@ from django.contrib.auth.forms import PasswordChangeForm
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
 
 from .forms import EmailAuthenticationForm, ProfileForm
 from .permissions import member_required
@@ -44,6 +45,7 @@ def login_view(request: HttpRequest) -> HttpResponse:
     )
 
 
+@require_POST
 def logout_view(request: HttpRequest) -> HttpResponseRedirect:
     logout(request)
     return redirect(settings.LOGOUT_REDIRECT_URL)

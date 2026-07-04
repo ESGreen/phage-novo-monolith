@@ -6,14 +6,14 @@
       <a class="site-title" href="/dashboard/">The Phage</a>
       <nav class="member-nav" aria-label="Member navigation">
         {% for item in root_menu_items %}
-          <a href="{{ item.url }}">{{ item.label }}</a>
+          <a class="nav-link" href="{{ item.url }}">{{ item.label }}</a>
         {% empty %}
-          <a href="/dashboard/">Dashboard</a>
-          <a href="{% url 'accounts:profile' %}">Profile</a>
+          <a class="nav-link" href="/dashboard/">Dashboard</a>
+          <a class="nav-link" href="{% url 'accounts:profile' %}">Profile</a>
         {% endfor %}
         <form class="logout-form" method="post" action="{% url 'accounts:logout' %}">
           {% csrf_token %}
-          <button class="link-button" type="submit">Logout</button>
+          <button class="nav-link-button" type="submit">Logout</button>
         </form>
       </nav>
     </div>

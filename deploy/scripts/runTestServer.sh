@@ -11,7 +11,28 @@ if [[ ! -x "${PYTHON}" ]]; then
   exit 1
 fi
 
-RUNTIME_ROOT="${THEPHAGE_TEST_SERVER_ROOT:-/tmp/thephage-test-server}"
+CLEAR_RUNTIME=false
+for arg in "$@"; do
+  case "${arg}" in
+    --clear)
+      CLEAR_RUNTIME=true
+      ;;
+    --help|-h)
+      echo "Usage: $0 [--clear]"
+      echo
+      echo "Runs a local test server using /tmp/thephage-test-server."
+      echo "  --clear  Remove and recreate the local TOML config and SQLite database."
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: ${arg}" >&2
+      echo "Usage: $0 [--clear]" >&2
+      exit 1
+      ;;
+  esac
+done
+
+RUNTIME_ROOT="/tmp/thephage-test-server"
 HOST="${THEPHAGE_TEST_SERVER_HOST:-127.0.0.1}"
 PORT="${THEPHAGE_TEST_SERVER_PORT:-8000}"
 LINK_HOST="127.0.0.1"
@@ -26,7 +47,12 @@ BACKUP_ROOT="${RUNTIME_ROOT}/backups"
 
 mkdir -p "${PUBLIC_ROOT}" "${STATIC_ROOT}" "${MEDIA_ROOT}" "${TMP_ROOT}" "${BACKUP_ROOT}"
 
-cat > "${CONFIG_PATH}" <<EOF
+if [[ "${CLEAR_RUNTIME}" == "true" ]]; then
+  rm -f "${CONFIG_PATH}" "${SQLITE_PATH}" "${SQLITE_PATH}-shm" "${SQLITE_PATH}-wal"
+fi
+
+if [[ ! -f "${CONFIG_PATH}" ]]; then
+  cat > "${CONFIG_PATH}" <<EOF
 [site]
 base_url = "http://${LINK_HOST}:${PORT}"
 secret_key = "test-server-secret-key-not-for-production"
@@ -67,6 +93,9 @@ config_retention_days = 90
 media_retention_days = 45
 config_paths = ["${CONFIG_PATH}"]
 EOF
+else
+  echo "Reusing existing config: ${CONFIG_PATH}"
+fi
 
 cat > "${PUBLIC_ROOT}/index.html" <<'EOF'
 <!doctype html>

@@ -101,6 +101,7 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = CONFIG.paths.static_root
+STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = "/media/"
 MEDIA_ROOT = CONFIG.paths.media_root
 PUBLIC_ROOT = CONFIG.paths.public_root
