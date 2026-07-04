@@ -299,6 +299,27 @@ Development:
 - Local media/static/public paths allowed.
 - Stripe test credentials only.
 
+## Deployment Runtime
+
+V1 production deployment uses a single EC2 instance.
+
+Settled deployment choices:
+
+- OS: Ubuntu 24.04 LTS.
+- Runtime: host install, not containerized.
+- App user/group: `phage:phage`.
+- Python: Ubuntu Python 3.12 with virtualenv.
+- App path: `/opt/thephage/app`.
+- Virtualenv path: `/opt/thephage/venv`.
+- Config path: `/etc/thephage/thephage.toml`.
+- PostgreSQL: local PostgreSQL on the same host.
+- Web server: Nginx on the host.
+- App server: Gunicorn managed by `thephage.service`.
+- TLS: Let's Encrypt using certbot.
+- Backups: daily systemd timer using EC2 IAM role S3 access.
+
+Future containerization should remain possible, but it is not part of V1.
+
 ## URL Layout
 
 Project URL includes:

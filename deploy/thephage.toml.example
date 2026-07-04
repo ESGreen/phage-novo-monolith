@@ -8,11 +8,11 @@
 #
 # Recommended permissions:
 #
-#   owner: the web app user
-#   mode:  0600
+#   owner: root:phage
+#   mode:  0640
 #
 # This file contains secrets such as database passwords and Stripe keys.
-# Keep it readable only by the account that runs the website.
+# Keep it readable only by root and the account that runs the website.
 #
 # After editing this file, restart the web application service.
 #
@@ -253,11 +253,10 @@ live_webhook_secret = "CHANGE_ME_whsec_..."
 
 [backups]
 
-# Backup settings for active-season lightweight backups.
+# Backup settings for lightweight backups.
 #
 # Full EC2 images are still the preferred backup before major system changes.
-# This section is for smaller recurring backups while the site is live,
-# especially while taxes are open.
+# This section is for smaller recurring backups while the site is live.
 
 
 # Enable or disable PostgreSQL database backups.
@@ -286,15 +285,15 @@ media_backups_enabled = true
 #
 # The bucket should be private and encrypted.
 #
-s3_bucket = "CHANGE_ME_thephage_backups_bucket"
+s3_bucket = "web2-backups-thephage"
 
 
 # Prefix inside the S3 bucket.
 #
 # Example final paths might look like:
 #
-#   s3://thephage-backups/prod/database/2026-07-03-0100.dump
-#   s3://thephage-backups/prod/config/2026-07-03-0100.tar.gz
+#   s3://web2-backups-thephage/prod/database/2026-07-03-0100.dump
+#   s3://web2-backups-thephage/prod/config/2026-07-03-0100.tar.gz
 #
 s3_prefix = "prod"
 
@@ -308,8 +307,8 @@ local_backup_dir = "/var/backups/thephage"
 
 # Number of days to keep database backups.
 #
-# During active tax collection, hourly backups may be created.
-# Keeping 30 days is a reasonable starting point for V1.
+# V1 runs daily database backups. Keeping 30 days is a reasonable
+# starting point.
 #
 database_retention_days = 30
 
@@ -339,4 +338,6 @@ config_paths = [
   "/etc/thephage/thephage.toml",
   "/etc/nginx/sites-available/thephage",
   "/etc/systemd/system/thephage.service",
+  "/etc/systemd/system/thephage-backup.service",
+  "/etc/systemd/system/thephage-backup.timer",
 ]

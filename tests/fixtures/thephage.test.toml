@@ -1,0 +1,45 @@
+[site]
+base_url = "http://testserver"
+secret_key = "test-secret-key-not-for-production"
+debug = true
+allowed_hosts = ["testserver", "localhost"]
+timezone = "America/Los_Angeles"
+
+[database]
+host = "localhost"
+port = 5432
+name = "thephage_test"
+user = "thephage"
+password = "test-database-password"
+
+[paths]
+public_root = "/tmp/thephage-test/public"
+static_root = "/tmp/thephage-test/static"
+media_root = "/tmp/thephage-test/media"
+tmp_root = "/tmp/thephage-test/tmp"
+
+[stripe]
+test_secret_key = "sk_test_dummy"
+test_publishable_key = "pk_test_dummy"
+test_webhook_secret = "whsec_test_dummy"
+live_secret_key = "sk_live_dummy"
+live_publishable_key = "pk_live_dummy"
+live_webhook_secret = "whsec_live_dummy"
+
+[backups]
+database_backups_enabled = true
+config_backups_enabled = true
+media_backups_enabled = true
+s3_bucket = "web2-backups-thephage"
+s3_prefix = "test"
+local_backup_dir = "/tmp/thephage-test/backups"
+database_retention_days = 30
+config_retention_days = 90
+media_retention_days = 45
+config_paths = [
+  "/etc/thephage/thephage.toml",
+  "/etc/nginx/sites-available/thephage",
+  "/etc/systemd/system/thephage.service",
+  "/etc/systemd/system/thephage-backup.service",
+  "/etc/systemd/system/thephage-backup.timer",
+]

@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "thephage"
+version = "0.1.0"
+description = "Django replacement for thephage.org"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "Django>=5.2,<6.0",
+  "psycopg[binary]>=3.2,<4.0",
+  "stripe>=12,<13",
+  "tomli>=2.0; python_version < '3.11'",
+  "markdown>=3.7,<4.0",
+  "bleach>=6.2,<7.0",
+  "Pillow>=11,<12",
+  "gunicorn>=23,<24",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3,<9.0",
+  "pytest-django>=4.9,<5.0",
+  "pytest-env>=1.1,<2.0",
+  "pytest-mock>=3.14,<4.0",
+  "freezegun>=1.5,<2.0",
+  "requests>=2.32,<3.0",
+  "responses>=0.25,<1.0",
+  "ruff>=0.9,<1.0",
+]
+
+[tool.setuptools.packages.find]
+include = [
+  "thephage*",
+  "accounts*",
+  "adminui*",
+  "camp*",
+  "content*",
+  "core*",
+  "payments*",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "thephage.settings"
+python_files = ["test_*.py", "*_tests.py"]
+testpaths = ["tests", "accounts", "adminui", "camp", "content", "core", "payments"]
+markers = [
+  "unit: fast isolated tests",
+  "integration: cross-app or database-backed tests",
+  "stripe: Stripe-related tests using mocks/fakes",
+  "deployment: checks against deployed environments, excluded by default",
+  "slow: slower tests",
+]
+addopts = "-m 'not deployment'"
+env = [
+  "THEPHAGE_CONFIG=tests/fixtures/thephage.test.toml",
+  "THEPHAGE_TEST_DATABASE=sqlite",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["*/migrations/*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

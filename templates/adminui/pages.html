@@ -1,0 +1,11 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Pages Admin - The Phage{% endblock %}
+
+{% block content %}
+  <section class="content-card">
+    <h1>Pages</h1>
+    <ul>{% for page in pages %}<li>{{ page.title }} <form method="post" class="inline-form">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="page_id" value="{{ page.id }}"><button type="submit">Delete</button></form></li>{% endfor %}</ul>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="create">{{ form.as_p }}<button type="submit">Create</button></form>
+  </section>
+{% endblock %}

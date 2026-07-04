@@ -27,6 +27,8 @@ restore-thephage
 
 Backups are scheduled by the server, preferably with a systemd timer.
 
+V1 runs daily backups. If the site dies during tax collection, manually reconciling a small number of transactions is acceptable.
+
 S3 access is handled through the EC2 instance IAM role.
 
 There is no AWS access key section in:
@@ -152,17 +154,17 @@ Relevant config:
 
 ```toml
 [backups]
-s3_bucket = "thephage-backups"
+s3_bucket = "web2-backups-thephage"
 s3_prefix = "prod"
 ```
 
 Expected paths:
 
 ```text
-s3://thephage-backups/prod/database/
-s3://thephage-backups/prod/config/
-s3://thephage-backups/prod/media/
-s3://thephage-backups/prod/media-manifests/
+s3://web2-backups-thephage/prod/database/
+s3://web2-backups-thephage/prod/config/
+s3://web2-backups-thephage/prod/media/
+s3://web2-backups-thephage/prod/media-manifests/
 ```
 
 The bucket should be:
@@ -194,16 +196,10 @@ database/YYYY-MM-DD-HHMM.dump
 Example:
 
 ```text
-s3://thephage-backups/prod/database/2026-07-03-0100.dump
+s3://web2-backups-thephage/prod/database/2026-07-03-0100.dump
 ```
 
-During active tax collection:
-
-```text
-hourly database backups
-```
-
-Outside active tax collection:
+V1 backup cadence:
 
 ```text
 daily database backups
@@ -221,6 +217,8 @@ config_paths = [
   "/etc/thephage/thephage.toml",
   "/etc/nginx/sites-available/thephage",
   "/etc/systemd/system/thephage.service",
+  "/etc/systemd/system/thephage-backup.service",
+  "/etc/systemd/system/thephage-backup.timer",
 ]
 ```
 
@@ -233,7 +231,7 @@ config/YYYY-MM-DD-HHMM.tar.gz
 Example:
 
 ```text
-s3://thephage-backups/prod/config/2026-07-03-0100.tar.gz
+s3://web2-backups-thephage/prod/config/2026-07-03-0100.tar.gz
 ```
 
 Config backups may contain secrets.
@@ -264,7 +262,7 @@ Media backup should use an incremental S3 sync.
 Recommended behavior:
 
 ```text
-media_root -> s3://thephage-backups/prod/media/
+media_root -> s3://web2-backups-thephage/prod/media/
 ```
 
 The backup script should upload new or changed files.
@@ -294,7 +292,7 @@ Each media backup run should write a small manifest.
 Suggested path:
 
 ```text
-s3://thephage-backups/prod/media-manifests/YYYY-MM-DD-HHMM.json
+s3://web2-backups-thephage/prod/media-manifests/YYYY-MM-DD-HHMM.json
 ```
 
 The manifest should include at least:
@@ -483,10 +481,10 @@ Regular checks should verify:
 Useful commands:
 
 ```bash
-aws s3 ls s3://thephage-backups/prod/database/
-aws s3 ls s3://thephage-backups/prod/config/
-aws s3 ls s3://thephage-backups/prod/media/
-aws s3 ls s3://thephage-backups/prod/media-manifests/
+aws s3 ls s3://web2-backups-thephage/prod/database/
+aws s3 ls s3://web2-backups-thephage/prod/config/
+aws s3 ls s3://web2-backups-thephage/prod/media/
+aws s3 ls s3://web2-backups-thephage/prod/media-manifests/
 ```
 
 ## Restore Strategy
@@ -540,14 +538,15 @@ Example restore outline:
 
 ```bash
 sudo systemctl stop thephage
-aws s3 cp s3://thephage-backups/prod/database/YYYY-MM-DD-HHMM.dump /tmp/thephage.restore.dump
-# create safety copy if possible
-# drop/recreate database or restore into clean database
-pg_restore --clean --if-exists --dbname=thephage /tmp/thephage.restore.dump
+aws s3 cp s3://web2-backups-thephage/prod/database/YYYY-MM-DD-HHMM.dump /tmp/thephage.restore.dump
+sudo -u postgres pg_dump -Fc --file=/tmp/thephage.pre-restore-safety.dump thephage
+sudo -u postgres dropdb --if-exists thephage
+sudo -u postgres createdb --owner=thephage thephage
+sudo -u postgres pg_restore --dbname=thephage --role=thephage /tmp/thephage.restore.dump
 sudo systemctl start thephage
 ```
 
-Exact commands depend on final database user/service setup.
+These commands assume the V1 single-host PostgreSQL setup from `docs/deployment.md`.
 
 ## Config Loss Or Corruption
 
@@ -638,6 +637,12 @@ Backup scheduler:
 systemd timer
 ```
 
+Backup cadence:
+
+```text
+daily at 09:30 UTC
+```
+
 Service and timer names:
 
 ```text
@@ -663,6 +668,26 @@ Backup logs:
 journalctl -u thephage-backup.service
 ```
 
+S3 bucket:
+
+```text
+web2-backups-thephage
+```
+
+EC2 IAM role:
+
+```text
+thephage-web-role
+```
+
+Backup failure notification:
+
+```text
+manual V1 monitoring through systemd status and journal logs
+```
+
+Manual V1 monitoring is acceptable because daily backups are enough for the expected risk. Operators should check backup status before tax season, after deployments, and during operational reviews.
+
 Media manifest format:
 
 ```json
@@ -683,14 +708,55 @@ aws s3 sync "$MEDIA_ROOT/" "s3://$S3_BUCKET/$S3_PREFIX/media/" --delete
 
 The Python backup script may use AWS SDK calls instead of shelling out, but behavior should match this command: incremental upload with mirrored deletes.
 
-## Remaining Backup TODOs
+## Backup Timer Unit
 
-TODO: Exact systemd timer `OnCalendar` schedule and install/enable commands.
+Service path:
 
-TODO: Exact S3 bucket name.
+```text
+/etc/systemd/system/thephage-backup.service
+```
 
-TODO: Exact IAM role name.
+Service unit:
 
-TODO: Exact database restore commands after final PostgreSQL user/service setup.
+```ini
+[Unit]
+Description=Back up The Phage website
+After=network-online.target postgresql.service
+Wants=network-online.target
 
-TODO: How backup failures notify the admin/operator.
+[Service]
+Type=oneshot
+User=phage
+Group=phage
+Environment=THEPHAGE_CONFIG=/etc/thephage/thephage.toml
+ExecStart=/opt/thephage/scripts/backup-thephage
+```
+
+Timer path:
+
+```text
+/etc/systemd/system/thephage-backup.timer
+```
+
+Timer unit:
+
+```ini
+[Unit]
+Description=Run The Phage backup daily
+
+[Timer]
+OnCalendar=*-*-* 09:30:00
+Persistent=true
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target
+```
+
+Enable the timer:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now thephage-backup.timer
+systemctl list-timers | grep thephage-backup
+```

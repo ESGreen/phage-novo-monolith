@@ -1,0 +1,20 @@
+{% extends "member_base.html" %}
+
+{% block title %}{{ camp_year.year }} Taxes Return - The Phage{% endblock %}
+
+{% block content %}
+  <section class="content-card narrow-card">
+    <h1>{{ camp_year.year }} Taxes</h1>
+    {% if payment.status == "paid" %}
+      <h2>Payment Complete</h2>
+      <p>Your payment has been confirmed.</p>
+    {% elif payment %}
+      <h2>Payment Pending</h2>
+      <p>Your checkout returned, but Stripe confirmation is still pending.</p>
+    {% else %}
+      <h2>Payment Not Found</h2>
+      <p>We could not find a matching checkout session.</p>
+    {% endif %}
+    <p><a href="{% url 'camp:dashboard' camp_year.year %}">Back to dashboard</a></p>
+  </section>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Camp Admin - The Phage{% endblock %}
+
+{% block content %}
+  <section class="content-card">
+    <h1>Camp</h1>
+    <h2>Camp Years</h2>
+    <ul>{% for camp_year in camp_years %}<li>{{ camp_year.year }}</li>{% endfor %}</ul>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="camp_year">{{ camp_year_form.as_p }}<button type="submit">Create</button></form>
+  </section>
+  <section class="content-card">
+    <h2>Tax Tiers</h2>
+    <ul>{% for tier in tax_tiers %}<li>{{ tier.camp_year.year }} {{ tier.name }}</li>{% endfor %}</ul>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="tax_tier">{{ tax_tier_form.as_p }}<button type="submit">Create</button></form>
+  </section>
+  <section class="content-card">
+    <h2>Tax Add-ons</h2>
+    <ul>{% for add_on in tax_add_ons %}<li>{{ add_on.camp_year.year }} {{ add_on.name }}</li>{% endfor %}</ul>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="tax_add_on">{{ tax_add_on_form.as_p }}<button type="submit">Create</button></form>
+  </section>
+  <section class="content-card">
+    <h2>Tax Overrides</h2>
+    <ul>{% for override in tax_overrides %}<li>{{ override.user.email }} {{ override.camp_year.year }} {{ override.override_type }}</li>{% endfor %}</ul>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="tax_override">{{ tax_override_form.as_p }}<button type="submit">Create</button></form>
+  </section>
+{% endblock %}

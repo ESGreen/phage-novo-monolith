@@ -1,0 +1,16 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Payments Admin - The Phage{% endblock %}
+
+{% block content %}
+  <section class="content-card">
+    <h1>Payments</h1>
+    <table><tr><th>User</th><th>Year</th><th>Status</th><th>Mode</th><th>Tax</th><th>Add-ons</th><th>Total</th><th>Created</th><th>Paid</th></tr>
+      {% for payment in payments %}
+        <tr><td>{{ payment.user.email }}</td><td>{{ payment.camp_year.year }}</td><td>{{ payment.status }}</td><td>{{ payment.stripe_mode }}</td><td>{{ payment.tax_amount_cents }}</td><td>{{ payment.add_on_amount_cents }}</td><td>{{ payment.total_amount_cents }}</td><td>{{ payment.created_at }}</td><td>{{ payment.paid_at }}</td></tr>
+      {% endfor %}
+    </table>
+    <h2>Recent Logs</h2>
+    <ul>{% for log in logs %}<li>{{ log.created_at }} {{ log.level }} {{ log.event_type }}</li>{% endfor %}</ul>
+  </section>
+{% endblock %}

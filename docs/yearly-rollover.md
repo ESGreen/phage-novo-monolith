@@ -389,9 +389,7 @@ Check:
 - Backup process reports success.
 - EC2 image exists if one was created for the rollover.
 
-During active tax collection, database backups should run hourly.
-
-Outside tax season, daily backups are enough.
+Daily database backups are acceptable for V1.
 
 ## 17. Open Taxes
 

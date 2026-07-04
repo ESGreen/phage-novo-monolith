@@ -1,0 +1,18 @@
+{% extends "member_base.html" %}
+
+{% block title %}{{ menu.display_name }} - The Phage{% endblock %}
+
+{% block content %}
+  <section class="content-card narrow-card">
+    <h1>{{ menu.display_name }}</h1>
+    {% if items %}
+      <ul class="menu-list">
+        {% for item in items %}
+          <li><a href="{{ item.url }}">{{ item.label }}</a></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>This menu does not have any items yet.</p>
+    {% endif %}
+  </section>
+{% endblock %}

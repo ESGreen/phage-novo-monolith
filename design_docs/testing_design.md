@@ -786,8 +786,7 @@ Recommended approach:
 
 Suggested cadence:
 
-- Hourly database backups while taxes are open.
-- Daily database backups outside tax season.
+- Daily database backups.
 - Config backup after any deployment/config change.
 - Media backup daily if media changes during the season.
 

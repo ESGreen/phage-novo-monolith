@@ -1,0 +1,22 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Users Admin - The Phage{% endblock %}
+
+{% block content %}
+  <section class="content-card">
+    <h1>Users</h1>
+    <table><tr><th>Email</th><th>First</th><th>Last</th><th>Active</th><th>Admin</th><th>Last login</th></tr>
+      {% for user in users %}
+        <tr><td>{{ user.email }}</td><td>{{ user.first_name }}</td><td>{{ user.last_name }}</td><td>{{ user.is_active }}</td><td>{{ user.is_admin }}</td><td>{{ user.last_login }}</td></tr>
+      {% endfor %}
+    </table>
+  </section>
+  <section class="content-card">
+    <h2>Create User</h2>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit">Create</button>
+    </form>
+  </section>
+{% endblock %}

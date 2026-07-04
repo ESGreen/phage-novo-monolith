@@ -1,0 +1,11 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Admin - The Phage{% endblock %}
+
+{% block content %}
+  <section class="content-card">
+    <h1>Admin</h1>
+    <p>Stripe mode: <strong>{{ site_settings.stripe_mode }}</strong></p>
+    <p>Current camp year: <strong>{{ current_camp_year|default:"Not configured" }}</strong></p>
+  </section>
+{% endblock %}

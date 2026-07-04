@@ -1,0 +1,85 @@
+{% extends "member_base.html" %}
+{% load money %}
+
+{% block title %}{{ camp_year.year }} Taxes - The Phage{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <h1>{{ camp_year.year }} Taxes</h1>
+    <p>Choose an available tax tier, enter your tax amount, and select any add-ons.</p>
+  </div>
+
+  {% if paid_payment %}
+    <section class="content-card narrow-card">
+      <h2>Taxes Paid</h2>
+      <p>Your taxes are paid for {{ camp_year.year }}.</p>
+    </section>
+  {% elif blocking_payment %}
+    <section class="content-card narrow-card">
+      <h2>Checkout Pending</h2>
+      <p>A checkout session is already open. Complete it or wait for it to expire.</p>
+    </section>
+  {% elif waived %}
+    <section class="content-card narrow-card">
+      <h2>Taxes Waived</h2>
+      <p>Your taxes are waived for {{ camp_year.year }}. No payment is required.</p>
+    </section>
+  {% elif not available_tiers %}
+    <section class="content-card narrow-card">
+      <h2>Taxes Unavailable</h2>
+      <p>Taxes are not currently available for {{ camp_year.year }}.</p>
+    </section>
+  {% else %}
+    <section class="content-card">
+      <h2>Available Tax Tiers</h2>
+      <p>Tax tiers are minimums. You may pay more than your selected tier minimum.</p>
+      {% if tax_override.override_type == "reduced_minimum" %}
+        <p>Your minimum has been reduced to {{ tax_override.reduced_minimum_amount_cents|cents }}.</p>
+      {% endif %}
+      <ul class="option-list">
+        {% for tier in available_tiers %}
+          <li>
+            <strong>{{ tier.name }}</strong>
+            <span>{{ tier.minimum_amount_cents|cents }} minimum</span>
+            {% if tier.description %}<p>{{ tier.description }}</p>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <section class="content-card">
+      <h2>Start Checkout</h2>
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        <fieldset>
+          <legend>Tax Tier</legend>
+          {{ form.tax_tier.errors }}
+          {{ form.tax_tier }}
+        </fieldset>
+        <div class="form-row">
+          {{ form.tax_amount_dollars.label_tag }}
+          {{ form.tax_amount_dollars }}
+          {{ form.tax_amount_dollars.errors }}
+        </div>
+        {% if available_add_ons %}
+          <fieldset>
+            <legend>Add-ons</legend>
+            <ul class="option-list">
+              {% for add_on in available_add_ons %}
+                <li>
+                  <strong>{{ add_on.name }}</strong>
+                  <span>{{ add_on.amount_cents|cents }}</span>
+                  {% if add_on.description %}<p>{{ add_on.description }}</p>{% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+            {{ form.add_ons.errors }}
+            {{ form.add_ons }}
+          </fieldset>
+        {% endif %}
+        <button type="submit">Start Checkout</button>
+      </form>
+    </section>
+  {% endif %}
+{% endblock %}

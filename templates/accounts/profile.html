@@ -1,0 +1,90 @@
+{% extends "member_base.html" %}
+
+{% block title %}Profile - The Phage{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <h1>Profile</h1>
+    <p>Update your member profile, email address, and password.</p>
+  </div>
+
+  <section class="content-card">
+    <h2>Member Details</h2>
+    {% if request.user.profile.photo %}
+      <p><img class="profile-photo" src="{{ request.user.profile.photo.url }}" alt="Profile photo"></p>
+    {% endif %}
+    <form method="post" enctype="multipart/form-data" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="profile">
+      {{ profile_form.non_field_errors }}
+      <div class="form-grid">
+        <div class="form-row">
+          {{ profile_form.first_name.label_tag }}
+          {{ profile_form.first_name }}
+          {{ profile_form.first_name.errors }}
+        </div>
+        <div class="form-row">
+          {{ profile_form.last_name.label_tag }}
+          {{ profile_form.last_name }}
+          {{ profile_form.last_name.errors }}
+        </div>
+      </div>
+      <div class="form-row">
+        {{ profile_form.bio_markdown.label_tag }}
+        {{ profile_form.bio_markdown }}
+        {{ profile_form.bio_markdown.errors }}
+      </div>
+      <div class="form-row">
+        {{ profile_form.photo.label_tag }}
+        {{ profile_form.photo }}
+        {{ profile_form.photo.errors }}
+        <p class="help-text">Uploading a new image replaces your current photo.</p>
+      </div>
+      <fieldset>
+        <legend>Email Change</legend>
+        <p class="help-text">Leave these blank to keep your current email address.</p>
+        <div class="form-grid">
+          <div class="form-row">
+            {{ profile_form.new_email.label_tag }}
+            {{ profile_form.new_email }}
+            {{ profile_form.new_email.errors }}
+          </div>
+          <div class="form-row">
+            {{ profile_form.confirm_new_email.label_tag }}
+            {{ profile_form.confirm_new_email }}
+            {{ profile_form.confirm_new_email.errors }}
+          </div>
+        </div>
+      </fieldset>
+      <button type="submit">Save</button>
+    </form>
+  </section>
+
+  <section class="content-card">
+    <h2>Change Password</h2>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="password">
+      {{ password_form.non_field_errors }}
+      <div class="form-row">
+        {{ password_form.old_password.label_tag }}
+        {{ password_form.old_password }}
+        {{ password_form.old_password.errors }}
+      </div>
+      <div class="form-row">
+        {{ password_form.new_password1.label_tag }}
+        {{ password_form.new_password1 }}
+        {{ password_form.new_password1.errors }}
+        {% if password_form.new_password1.help_text %}
+          <div class="help-text">{{ password_form.new_password1.help_text|safe }}</div>
+        {% endif %}
+      </div>
+      <div class="form-row">
+        {{ password_form.new_password2.label_tag }}
+        {{ password_form.new_password2 }}
+        {{ password_form.new_password2.errors }}
+      </div>
+      <button type="submit">Change Password</button>
+    </form>
+  </section>
+{% endblock %}

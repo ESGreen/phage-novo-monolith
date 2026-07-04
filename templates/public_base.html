@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block header %}
+  <header class="site-header">
+    <div class="site-header__inner">
+      <a class="site-title" href="/public/">The Phage</a>
+      <nav aria-label="Public navigation">
+        <a href="{% url 'accounts:login' %}">Login</a>
+      </nav>
+    </div>
+  </header>
+{% endblock %}

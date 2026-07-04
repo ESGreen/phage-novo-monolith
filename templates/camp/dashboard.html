@@ -1,0 +1,46 @@
+{% extends "member_base.html" %}
+
+{% block title %}{{ camp_year.year }} Dashboard - The Phage{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <h1>{{ camp_year.year }} Dashboard</h1>
+    <p>Track your member steps for this camp year.</p>
+  </div>
+
+  {% if pre_html %}
+    <section class="content-card markdown-body">
+      {{ pre_html }}
+    </section>
+  {% endif %}
+
+  <section class="content-card">
+    <h2>Checklist</h2>
+    <ul class="status-list">
+      <li>
+        <span>Profile</span>
+        <strong>Complete</strong>
+        <a href="{% url 'accounts:profile' %}">Edit profile</a>
+      </li>
+      <li>
+        <span>Taxes</span>
+        <strong>{{ tax_status }}</strong>
+        <a href="/{{ camp_year.year }}/taxes/">Tax page</a>
+      </li>
+    </ul>
+  </section>
+
+  <section class="content-card">
+    <h2>Quick Links</h2>
+    <ul>
+      <li><a href="{% url 'accounts:profile' %}">Profile</a></li>
+      <li><a href="/{{ camp_year.year }}/taxes/">Taxes</a></li>
+    </ul>
+  </section>
+
+  {% if post_html %}
+    <section class="content-card markdown-body">
+      {{ post_html }}
+    </section>
+  {% endif %}
+{% endblock %}
