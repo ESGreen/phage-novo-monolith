@@ -5,63 +5,84 @@
 {% block content %}
   <div class="page-heading">
     <h1>Profile</h1>
-    <p>Update your member profile, email address, and password.</p>
+    <p>Update your photo, bio, email address, and password.</p>
   </div>
 
   <section class="content-card">
-    <h2>Member Details</h2>
+    <h2>Photo</h2>
     {% if request.user.profile.photo %}
       <p><img class="profile-photo" src="{{ request.user.profile.photo.url }}" alt="Profile photo"></p>
+      <p class="help-text">Choose a new image to replace your current photo.</p>
+    {% else %}
+      <div class="profile-photo-empty">No photo present.</div>
+      <p class="help-text">Choose an image to add a profile photo.</p>
     {% endif %}
-    <form method="post" enctype="multipart/form-data" novalidate>
+    <form id="profile-photo-form" method="post" enctype="multipart/form-data" novalidate>
       {% csrf_token %}
-      <input type="hidden" name="action" value="profile">
-      {{ profile_form.non_field_errors }}
-      <div class="form-grid">
-        <div class="form-row">
-          {{ profile_form.first_name.label_tag }}
-          {{ profile_form.first_name }}
-          {{ profile_form.first_name.errors }}
-        </div>
-        <div class="form-row">
-          {{ profile_form.last_name.label_tag }}
-          {{ profile_form.last_name }}
-          {{ profile_form.last_name.errors }}
-        </div>
-      </div>
+      <input type="hidden" name="action" value="photo">
+      {{ photo_form.non_field_errors }}
       <div class="form-row">
-        {{ profile_form.bio_markdown.label_tag }}
-        {{ profile_form.bio_markdown }}
-        {{ profile_form.bio_markdown.errors }}
+        {{ photo_form.photo }}
+        <label class="file-picker-button" for="{{ photo_form.photo.id_for_label }}">
+          {% if request.user.profile.photo %}Replace Photo{% else %}Load Photo{% endif %}
+        </label>
+        {{ photo_form.photo.errors }}
       </div>
-      <div class="form-row">
-        {{ profile_form.photo.label_tag }}
-        {{ profile_form.photo }}
-        {{ profile_form.photo.errors }}
-        <p class="help-text">Uploading a new image replaces your current photo.</p>
-      </div>
-      <fieldset>
-        <legend>Email Change</legend>
-        <p class="help-text">Leave these blank to keep your current email address.</p>
-        <div class="form-grid">
-          <div class="form-row">
-            {{ profile_form.new_email.label_tag }}
-            {{ profile_form.new_email }}
-            {{ profile_form.new_email.errors }}
-          </div>
-          <div class="form-row">
-            {{ profile_form.confirm_new_email.label_tag }}
-            {{ profile_form.confirm_new_email }}
-            {{ profile_form.confirm_new_email.errors }}
-          </div>
-        </div>
-      </fieldset>
-      <button type="submit">Save</button>
     </form>
   </section>
 
   <section class="content-card">
-    <h2>Change Password</h2>
+    <h2>Basic Bio</h2>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="bio">
+      {{ bio_form.non_field_errors }}
+      <div class="form-grid">
+        <div class="form-row">
+          {{ bio_form.first_name.label_tag }}
+          {{ bio_form.first_name }}
+          {{ bio_form.first_name.errors }}
+        </div>
+        <div class="form-row">
+          {{ bio_form.last_name.label_tag }}
+          {{ bio_form.last_name }}
+          {{ bio_form.last_name.errors }}
+        </div>
+      </div>
+      <div class="form-row">
+        {{ bio_form.bio_markdown.label_tag }}
+        {{ bio_form.bio_markdown }}
+        {{ bio_form.bio_markdown.errors }}
+      </div>
+      <button type="submit">Save Bio</button>
+    </form>
+  </section>
+
+  <section class="content-card">
+    <h2>Email</h2>
+    <p>Current email: <strong>{{ request.user.email }}</strong></p>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="email">
+      {{ email_form.non_field_errors }}
+      <div class="form-grid">
+        <div class="form-row">
+          {{ email_form.new_email.label_tag }}
+          {{ email_form.new_email }}
+          {{ email_form.new_email.errors }}
+        </div>
+        <div class="form-row">
+          {{ email_form.confirm_new_email.label_tag }}
+          {{ email_form.confirm_new_email }}
+          {{ email_form.confirm_new_email.errors }}
+        </div>
+      </div>
+      <button type="submit">Change Email</button>
+    </form>
+  </section>
+
+  <section class="content-card">
+    <h2>Password</h2>
     <form method="post" novalidate>
       {% csrf_token %}
       <input type="hidden" name="action" value="password">
@@ -87,4 +108,15 @@
       <button type="submit">Change Password</button>
     </form>
   </section>
+
+  <script>
+    const profilePhotoInput = document.querySelector("[data-auto-submit-form='profile-photo-form']");
+    if (profilePhotoInput) {
+      profilePhotoInput.addEventListener("change", () => {
+        if (profilePhotoInput.files.length > 0) {
+          document.getElementById("profile-photo-form").requestSubmit();
+        }
+      });
+    }
+  </script>
 {% endblock %}

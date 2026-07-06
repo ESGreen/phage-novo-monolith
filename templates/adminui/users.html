@@ -1,22 +1,103 @@
 {% extends "admin_base.html" %}
+{% load static %}
 
 {% block title %}Users Admin - The Phage{% endblock %}
 
 {% block content %}
-  <section class="content-card">
+  <div class="page-heading">
     <h1>Users</h1>
-    <table><tr><th>Email</th><th>First</th><th>Last</th><th>Active</th><th>Admin</th><th>Last login</th></tr>
-      {% for user in users %}
-        <tr><td>{{ user.email }}</td><td>{{ user.first_name }}</td><td>{{ user.last_name }}</td><td>{{ user.is_active }}</td><td>{{ user.is_admin }}</td><td>{{ user.last_login }}</td></tr>
-      {% endfor %}
-    </table>
-  </section>
+  </div>
+
   <section class="content-card">
     <h2>Create User</h2>
-    <form method="post" enctype="multipart/form-data">
+    <form method="post" autocomplete="off" data-1p-ignore="true" data-bwignore="true" data-lpignore="true" data-user-create-form data-intro-email-url="{% url 'adminui:user-intro-email' %}" novalidate>
       {% csrf_token %}
-      {{ form.as_p }}
-      <button type="submit">Create</button>
+      {{ form.non_field_errors }}
+      <div class="form-row">
+        {{ form.account_address.label_tag }}
+        {{ form.account_address }}
+        {{ form.account_address.errors }}
+      </div>
+      <fieldset class="compact-fieldset">
+        <legend>Name</legend>
+        <div class="form-grid">
+          <div class="form-row">
+            {{ form.first_name.label_tag }}
+            {{ form.first_name }}
+            {{ form.first_name.errors }}
+          </div>
+          <div class="form-row">
+            {{ form.last_name.label_tag }}
+            {{ form.last_name }}
+            {{ form.last_name.errors }}
+          </div>
+        </div>
+      </fieldset>
+      <div class="checkbox-list">
+        <label>{{ form.is_admin }} Admin</label>
+        {{ form.is_admin.errors }}
+        <label>{{ form.is_active }} Active</label>
+        {{ form.is_active.errors }}
+      </div>
+      <div class="form-row">
+        {{ form.initial_secret.label_tag }}
+        <div class="input-with-button">
+          {{ form.initial_secret }}
+          <button type="button" class="secondary-button" data-generate-password>Generate</button>
+        </div>
+        {{ form.initial_secret.errors }}
+      </div>
+      <div class="form-actions">
+        <button type="submit">Create User</button>
+        <button type="button" class="secondary-button" data-copy-intro-email>Copy Intro Email</button>
+        <p class="help-text" data-intro-email-status{% if create_user_status_message %} data-status-type="error"{% endif %} aria-live="polite">{{ create_user_status_message }}</p>
+      </div>
     </form>
   </section>
+
+  <section class="content-card">
+    <h2>Existing Users</h2>
+    <div class="table-tools" data-user-table-controls>
+      <label for="user-table-search">Search users</label>
+      <input id="user-table-search" type="search" autocomplete="off" data-user-table-search>
+      <button type="button" class="secondary-button" data-user-table-clear>Clear</button>
+      <p class="table-count" data-user-table-count>Showing {{ users|length }} of {{ users|length }} users</p>
+    </div>
+    <table id="users-table" data-user-table>
+      <thead>
+        <tr>
+          <th><button class="sort-button" type="button" data-sort-column="0">Email</button></th>
+          <th><button class="sort-button" type="button" data-sort-column="1">First</button></th>
+          <th><button class="sort-button" type="button" data-sort-column="2">Last</button></th>
+          <th><button class="sort-button" type="button" data-sort-column="3">Active</button></th>
+          <th><button class="sort-button" type="button" data-sort-column="4">Admin</button></th>
+          <th><button class="sort-button" type="button" data-sort-column="5">Last login</button></th>
+          <th>Edit</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for user in users %}
+        <tr data-search="{{ user.email|lower }} {{ user.first_name|lower }} {{ user.last_name|lower }}">
+          <td data-sort="{{ user.email|lower }}">{{ user.email }}</td>
+          <td data-sort="{{ user.first_name|lower }}">{{ user.first_name }}</td>
+          <td data-sort="{{ user.last_name|lower }}">{{ user.last_name }}</td>
+          <td data-sort="{% if user.is_active %}1{% else %}0{% endif %}">{{ user.is_active }}</td>
+          <td data-sort="{% if user.is_admin %}1{% else %}0{% endif %}">{{ user.is_admin }}</td>
+          <td data-sort="{% if user.last_login %}{{ user.last_login|date:'c' }}{% endif %}">{{ user.last_login }}</td>
+          <td>
+            {% if user.pk == request.user.pk %}
+              <span class="help-text">Current user cannot be edited</span>
+            {% else %}
+              <a href="{% url 'adminui:user-edit' user.id %}">Edit</a>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/admin-users.js' %}" defer></script>
 {% endblock %}

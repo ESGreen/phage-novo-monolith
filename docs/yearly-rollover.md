@@ -290,6 +290,10 @@ Go to `/admin/users/`.
 
 Review users before opening taxes.
 
+New-user intro emails are rendered from `/home/evan/projects/newweb/templates/adminui/emails/new_user_intro.txt`.
+
+Review and update that template before adding new users if the login instructions or yearly wording should change.
+
 Verify:
 
 - Admin users are correct.

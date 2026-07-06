@@ -1,11 +1,15 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block header %}
   <header class="site-header">
     <div class="site-header__inner">
-      <a class="site-title" href="/public/">The Phage</a>
+      <a class="site-title" href="/public/">
+        <img class="site-title__icon" src="{% static 'img/header_icon.png' %}" alt="" aria-hidden="true">
+        <span>The Phage</span>
+      </a>
       <nav aria-label="Public navigation">
-        <a href="{% url 'accounts:login' %}">Login</a>
+        <a class="nav-link" href="{% url 'accounts:login' %}">Login</a>
       </nav>
     </div>
   </header>

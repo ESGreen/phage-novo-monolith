@@ -1,0 +1,126 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Edit: {{ heading }} - The Phage{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <h1>Edit: {{ heading }}</h1>
+    <p><a href="{% url 'adminui:users' %}">Back to users</a></p>
+  </div>
+
+  <section class="content-card">
+    <h2>User Flags</h2>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="flags">
+      {{ flags_form.non_field_errors }}
+      <div class="checkbox-list">
+        <label>{{ flags_form.is_active }} Active</label>
+        {{ flags_form.is_active.errors }}
+        <label>{{ flags_form.is_admin }} Admin</label>
+        {{ flags_form.is_admin.errors }}
+      </div>
+      <button type="submit">Update User Flags</button>
+    </form>
+  </section>
+
+  <section class="content-card">
+    <h2>Email</h2>
+    <p>Current email: <strong>{{ edited_user.email }}</strong></p>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="email">
+      {{ email_form.non_field_errors }}
+      <div class="form-row">
+        {{ email_form.new_email.label_tag }}
+        {{ email_form.new_email }}
+        {{ email_form.new_email.errors }}
+      </div>
+      <button type="submit">Update Email</button>
+    </form>
+  </section>
+
+  <section class="content-card">
+    <h2>Password</h2>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="password">
+      {{ password_form.non_field_errors }}
+      <div class="form-row">
+        {{ password_form.new_password1.label_tag }}
+        {{ password_form.new_password1 }}
+        {{ password_form.new_password1.errors }}
+        {% if password_form.new_password1.help_text %}
+          <div class="help-text">{{ password_form.new_password1.help_text|safe }}</div>
+        {% endif %}
+      </div>
+      <div class="form-row">
+        {{ password_form.new_password2.label_tag }}
+        {{ password_form.new_password2 }}
+        {{ password_form.new_password2.errors }}
+      </div>
+      <button type="submit">Update Password</button>
+    </form>
+  </section>
+
+  <section class="content-card">
+    <h2>Photo</h2>
+    {% if edited_user.profile.photo %}
+      <p><img class="profile-photo" src="{{ edited_user.profile.photo.url }}" alt="Profile photo"></p>
+      <p class="help-text">Choose a new image to replace this user's current photo.</p>
+    {% else %}
+      <div class="profile-photo-empty">No photo present.</div>
+      <p class="help-text">Choose an image to add a profile photo.</p>
+    {% endif %}
+    <form id="admin-user-photo-form" method="post" enctype="multipart/form-data" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="photo">
+      {{ photo_form.non_field_errors }}
+      <div class="form-row">
+        {{ photo_form.photo }}
+        <label class="file-picker-button" for="{{ photo_form.photo.id_for_label }}">
+          {% if edited_user.profile.photo %}Replace Photo{% else %}Load Photo{% endif %}
+        </label>
+        {{ photo_form.photo.errors }}
+      </div>
+    </form>
+  </section>
+
+  <section class="content-card">
+    <h2>Basic Bio</h2>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="bio">
+      {{ bio_form.non_field_errors }}
+      <div class="form-grid">
+        <div class="form-row">
+          {{ bio_form.first_name.label_tag }}
+          {{ bio_form.first_name }}
+          {{ bio_form.first_name.errors }}
+        </div>
+        <div class="form-row">
+          {{ bio_form.last_name.label_tag }}
+          {{ bio_form.last_name }}
+          {{ bio_form.last_name.errors }}
+        </div>
+      </div>
+      <div class="form-row">
+        {{ bio_form.bio_markdown.label_tag }}
+        {{ bio_form.bio_markdown }}
+        {{ bio_form.bio_markdown.errors }}
+      </div>
+      <button type="submit">Save Bio</button>
+    </form>
+  </section>
+
+  <script>
+    const adminUserPhotoInput = document.querySelector("#admin-user-photo-form [data-auto-submit-form]");
+    if (adminUserPhotoInput) {
+      adminUserPhotoInput.addEventListener("change", () => {
+        if (adminUserPhotoInput.files.length > 0) {
+          document.getElementById("admin-user-photo-form").requestSubmit();
+        }
+      });
+    }
+  </script>
+{% endblock %}

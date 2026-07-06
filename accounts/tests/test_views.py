@@ -108,7 +108,11 @@ def test_profile_page_renders_for_member(client) -> None:
     response = client.get("/profile/")
 
     assert response.status_code == 200
-    assert b"Member Details" in response.content
+    assert b"Photo" in response.content
+    assert b"No photo present" in response.content
+    assert b"Load Photo" in response.content
+    assert b"Basic Bio" in response.content
+    assert b"Email" in response.content
     assert b"Change Password" in response.content
 
 
@@ -130,12 +134,10 @@ def test_member_can_update_name_and_bio(client) -> None:
     response = client.post(
         "/profile/",
         {
-            "action": "profile",
+            "action": "bio",
             "first_name": "Ada",
             "last_name": "Lovelace",
             "bio_markdown": "# Bio\n\nWrites notes.",
-            "new_email": "",
-            "confirm_new_email": "",
         },
     )
 
@@ -153,10 +155,7 @@ def test_email_change_requires_confirmation(client) -> None:
     response = client.post(
         "/profile/",
         {
-            "action": "profile",
-            "first_name": "",
-            "last_name": "",
-            "bio_markdown": "",
+            "action": "email",
             "new_email": "new@example.com",
             "confirm_new_email": "other@example.com",
         },
@@ -175,10 +174,7 @@ def test_confirmed_email_change_updates_email_lowercase(client) -> None:
     response = client.post(
         "/profile/",
         {
-            "action": "profile",
-            "first_name": "",
-            "last_name": "",
-            "bio_markdown": "",
+            "action": "email",
             "new_email": "NEW@example.COM",
             "confirm_new_email": "new@example.com",
         },
@@ -197,10 +193,7 @@ def test_email_change_rejects_duplicate_email(client) -> None:
     response = client.post(
         "/profile/",
         {
-            "action": "profile",
-            "first_name": "",
-            "last_name": "",
-            "bio_markdown": "",
+            "action": "email",
             "new_email": "taken@example.com",
             "confirm_new_email": "taken@example.com",
         },
@@ -220,12 +213,7 @@ def test_member_can_replace_profile_photo(client, settings, tmp_path) -> None:
     response = client.post(
         "/profile/",
         {
-            "action": "profile",
-            "first_name": "",
-            "last_name": "",
-            "bio_markdown": "",
-            "new_email": "",
-            "confirm_new_email": "",
+            "action": "photo",
             "photo": png_upload(),
         },
     )
@@ -237,6 +225,8 @@ def test_member_can_replace_profile_photo(client, settings, tmp_path) -> None:
     assert media_item.file_path.startswith(f"{media_item.id}-avatar")
     assert "/" not in media_item.file_path
     assert default_storage.exists(media_item.file_path)
+    response = client.get("/profile/")
+    assert b"Replace Photo" in response.content
 
 
 def test_profile_save_without_photo_keeps_existing_photo(client, settings, tmp_path) -> None:
@@ -251,12 +241,10 @@ def test_profile_save_without_photo_keeps_existing_photo(client, settings, tmp_p
     response = client.post(
         "/profile/",
         {
-            "action": "profile",
+            "action": "bio",
             "first_name": "",
             "last_name": "",
             "bio_markdown": "Updated bio",
-            "new_email": "",
-            "confirm_new_email": "",
         },
     )
 

@@ -1,0 +1,9 @@
+Hi {{ full_name }},
+
+Your The Phage account has been created.
+
+Login page: {{ login_url }}
+Username: {{ email }}
+Password: {{ password }}
+
+Please sign in and update your profile when you have a chance.

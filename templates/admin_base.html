@@ -1,9 +1,13 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block header %}
   <header class="site-header">
     <div class="site-header__inner">
-      <a class="site-title" href="{% url 'adminui:home' %}">The Phage Admin</a>
+      <a class="site-title" href="{% url 'adminui:home' %}">
+        <img class="site-title__icon" src="{% static 'img/header_icon.png' %}" alt="" aria-hidden="true">
+        <span>The Phage Admin</span>
+      </a>
       <nav class="member-nav" aria-label="Admin navigation">
         <a class="nav-link" href="{% url 'adminui:home' %}">Home</a>
         <a class="nav-link" href="{% url 'adminui:users' %}">Users</a>

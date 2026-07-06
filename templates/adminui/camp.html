@@ -3,25 +3,71 @@
 {% block title %}Camp Admin - The Phage{% endblock %}
 
 {% block content %}
-  <section class="content-card">
+  <div class="page-heading">
     <h1>Camp</h1>
+  </div>
+
+  <section id="camp-years" class="content-card">
     <h2>Camp Years</h2>
-    <ul>{% for camp_year in camp_years %}<li>{{ camp_year.year }}</li>{% endfor %}</ul>
-    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="camp_year">{{ camp_year_form.as_p }}<button type="submit">Create</button></form>
+    {% if camp_years %}
+      <table>
+        <thead>
+          <tr>
+            <th>Year</th>
+            <th>People</th>
+            <th>Paid</th>
+            <th>Waived</th>
+            <th>Overrides</th>
+            <th>Tax tiers</th>
+            <th>Add-ons</th>
+            <th>Tax opens</th>
+            <th>Tax closes</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for camp_year in camp_years %}
+          <tr>
+            <td><a class="secondary-button" href="{% url 'adminui:camp-year-edit' camp_year.year %}">Edit {{ camp_year.year }}</a></td>
+            <td>{{ camp_year.people_count }}</td>
+            <td>{{ camp_year.paid_count }}</td>
+            <td>{{ camp_year.waived_count }}</td>
+            <td>{{ camp_year.override_count }}</td>
+            <td>{{ camp_year.tax_tier_count }}</td>
+            <td>{{ camp_year.tax_add_on_count }}</td>
+            <td>{% if camp_year.tax_opens_at %}{{ camp_year.tax_opens_at|date:"Y-m-d" }}{% else %}----{% endif %}</td>
+            <td>{% if camp_year.tax_closes_at %}{{ camp_year.tax_closes_at|date:"Y-m-d" }}{% else %}----{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No camp years configured.</p>
+    {% endif %}
   </section>
-  <section class="content-card">
-    <h2>Tax Tiers</h2>
-    <ul>{% for tier in tax_tiers %}<li>{{ tier.camp_year.year }} {{ tier.name }}</li>{% endfor %}</ul>
-    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="tax_tier">{{ tax_tier_form.as_p }}<button type="submit">Create</button></form>
-  </section>
-  <section class="content-card">
-    <h2>Tax Add-ons</h2>
-    <ul>{% for add_on in tax_add_ons %}<li>{{ add_on.camp_year.year }} {{ add_on.name }}</li>{% endfor %}</ul>
-    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="tax_add_on">{{ tax_add_on_form.as_p }}<button type="submit">Create</button></form>
-  </section>
-  <section class="content-card">
-    <h2>Tax Overrides</h2>
-    <ul>{% for override in tax_overrides %}<li>{{ override.user.email }} {{ override.camp_year.year }} {{ override.override_type }}</li>{% endfor %}</ul>
-    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="tax_override">{{ tax_override_form.as_p }}<button type="submit">Create</button></form>
+
+  <section id="create-camp-year" class="content-card">
+    <h2>Create Camp Year</h2>
+    <form method="post" action="{% url 'adminui:camp' %}#create-camp-year" novalidate>
+      {% csrf_token %}
+      {{ camp_year_form.non_field_errors }}
+      <div class="form-row">
+        {{ camp_year_form.year.label_tag }}
+        {{ camp_year_form.year }}
+        {{ camp_year_form.year.errors }}
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          {{ camp_year_form.dashboard_pre_page.label_tag }}
+          {{ camp_year_form.dashboard_pre_page }}
+          {{ camp_year_form.dashboard_pre_page.errors }}
+        </div>
+        <div class="form-row">
+          {{ camp_year_form.dashboard_post_page.label_tag }}
+          {{ camp_year_form.dashboard_post_page }}
+          {{ camp_year_form.dashboard_post_page.errors }}
+        </div>
+      </div>
+      <button type="submit">Create Camp Year</button>
+    </form>
   </section>
 {% endblock %}

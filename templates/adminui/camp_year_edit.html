@@ -1,0 +1,277 @@
+{% extends "admin_base.html" %}
+{% load money static %}
+
+{% block title %}Edit Camp Year: {{ camp_year.year }} - The Phage{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <h1>Edit Camp Year: {{ camp_year.year }}</h1>
+    <p>
+      <a href="{% url 'adminui:camp' %}">Back to camp years</a>
+      | <a href="{% url 'camp:dashboard' camp_year.year %}">View dashboard</a>
+      | <a href="{% url 'camp:taxes' camp_year.year %}">View taxes</a>
+    </p>
+  </div>
+
+  <section id="dashboard-pages" class="content-card">
+    <h2>Dashboard Pages</h2>
+    <form method="post" action="{% url 'adminui:camp-year-edit' camp_year.year %}#dashboard-pages" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="pages">
+      {{ pages_form.non_field_errors }}
+      <div class="form-grid">
+        <div class="form-row">
+          {{ pages_form.dashboard_pre_page.label_tag }}
+          {{ pages_form.dashboard_pre_page }}
+          {{ pages_form.dashboard_pre_page.errors }}
+        </div>
+        <div class="form-row">
+          {{ pages_form.dashboard_post_page.label_tag }}
+          {{ pages_form.dashboard_post_page }}
+          {{ pages_form.dashboard_post_page.errors }}
+        </div>
+      </div>
+      <button type="submit">Update Pages</button>
+    </form>
+  </section>
+
+  <section id="tax-tiers" class="content-card">
+    <h2>Tax Tiers</h2>
+    {% if tax_tiers %}
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Start date</th>
+            <th>End date</th>
+            <th>Minimum amount</th>
+            <th>Order</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for tier in tax_tiers %}
+          <tr>
+            <td>{{ tier.name }}</td>
+            <td>{{ tier.start_date|date:"Y-m-d" }}</td>
+            <td>{{ tier.expiration_date|date:"Y-m-d" }}</td>
+            <td>{{ tier.minimum_amount_cents|cents }}</td>
+            <td>
+              <div class="order-actions">
+                {% if not forloop.first %}
+                  <form class="inline-form" method="post" action="{% url 'adminui:camp-year-edit' camp_year.year %}#tax-tiers">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="tax_tier_move_up">
+                    <input type="hidden" name="item_id" value="{{ tier.id }}">
+                    <button type="submit" class="secondary-button">Move up</button>
+                  </form>
+                {% endif %}
+                {% if not forloop.last %}
+                  <form class="inline-form" method="post" action="{% url 'adminui:camp-year-edit' camp_year.year %}#tax-tiers">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="tax_tier_move_down">
+                    <input type="hidden" name="item_id" value="{{ tier.id }}">
+                    <button type="submit" class="secondary-button">Move down</button>
+                  </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No tax tiers configured for {{ camp_year.year }}.</p>
+    {% endif %}
+
+    <h3>Create Tax Tier</h3>
+    <form method="post" action="{% url 'adminui:camp-year-edit' camp_year.year %}#tax-tiers" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="tax_tier">
+      {{ tax_tier_form.non_field_errors }}
+      <div class="form-grid">
+        <div class="form-row">
+          {{ tax_tier_form.name.label_tag }}
+          {{ tax_tier_form.name }}
+          {{ tax_tier_form.name.errors }}
+        </div>
+        <div class="form-row">
+          {{ tax_tier_form.minimum_amount_dollars.label_tag }}
+          {{ tax_tier_form.minimum_amount_dollars }}
+          {{ tax_tier_form.minimum_amount_dollars.errors }}
+        </div>
+        <div class="form-row">
+          {{ tax_tier_form.start_date.label_tag }}
+          {{ tax_tier_form.start_date }}
+          {{ tax_tier_form.start_date.errors }}
+        </div>
+        <div class="form-row">
+          {{ tax_tier_form.expiration_date.label_tag }}
+          {{ tax_tier_form.expiration_date }}
+          {{ tax_tier_form.expiration_date.errors }}
+        </div>
+      </div>
+      <div class="form-row">
+        {{ tax_tier_form.description.label_tag }}
+        {{ tax_tier_form.description }}
+        {{ tax_tier_form.description.errors }}
+      </div>
+      <button type="submit">Create Tax Tier</button>
+    </form>
+  </section>
+
+  <section id="tax-add-ons" class="content-card">
+    <h2>Tax Add-ons</h2>
+    {% if tax_add_ons %}
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Start date</th>
+            <th>End date</th>
+            <th>Amount</th>
+            <th>Order</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for add_on in tax_add_ons %}
+          <tr>
+            <td>{{ add_on.name }}</td>
+            <td>{{ add_on.start_date|date:"Y-m-d" }}</td>
+            <td>{{ add_on.expiration_date|date:"Y-m-d" }}</td>
+            <td>{{ add_on.amount_cents|cents }}</td>
+            <td>
+              <div class="order-actions">
+                {% if not forloop.first %}
+                  <form class="inline-form" method="post" action="{% url 'adminui:camp-year-edit' camp_year.year %}#tax-add-ons">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="tax_add_on_move_up">
+                    <input type="hidden" name="item_id" value="{{ add_on.id }}">
+                    <button type="submit" class="secondary-button">Move up</button>
+                  </form>
+                {% endif %}
+                {% if not forloop.last %}
+                  <form class="inline-form" method="post" action="{% url 'adminui:camp-year-edit' camp_year.year %}#tax-add-ons">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="tax_add_on_move_down">
+                    <input type="hidden" name="item_id" value="{{ add_on.id }}">
+                    <button type="submit" class="secondary-button">Move down</button>
+                  </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No tax add-ons configured for {{ camp_year.year }}.</p>
+    {% endif %}
+
+    <h3>Create Tax Add-on</h3>
+    <form method="post" action="{% url 'adminui:camp-year-edit' camp_year.year %}#tax-add-ons" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="tax_add_on">
+      {{ tax_add_on_form.non_field_errors }}
+      <div class="form-grid">
+        <div class="form-row">
+          {{ tax_add_on_form.name.label_tag }}
+          {{ tax_add_on_form.name }}
+          {{ tax_add_on_form.name.errors }}
+        </div>
+        <div class="form-row">
+          {{ tax_add_on_form.amount_dollars.label_tag }}
+          {{ tax_add_on_form.amount_dollars }}
+          {{ tax_add_on_form.amount_dollars.errors }}
+        </div>
+        <div class="form-row">
+          {{ tax_add_on_form.start_date.label_tag }}
+          {{ tax_add_on_form.start_date }}
+          {{ tax_add_on_form.start_date.errors }}
+        </div>
+        <div class="form-row">
+          {{ tax_add_on_form.expiration_date.label_tag }}
+          {{ tax_add_on_form.expiration_date }}
+          {{ tax_add_on_form.expiration_date.errors }}
+        </div>
+      </div>
+      <div class="form-row">
+        {{ tax_add_on_form.description.label_tag }}
+        {{ tax_add_on_form.description }}
+        {{ tax_add_on_form.description.errors }}
+      </div>
+      <button type="submit">Create Tax Add-on</button>
+    </form>
+  </section>
+
+  <section id="tax-overrides" class="content-card">
+    <h2>Tax Overrides</h2>
+    {% if tax_overrides %}
+      <table>
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Type</th>
+            <th>Reduced minimum</th>
+            <th>Note</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for override in tax_overrides %}
+          <tr>
+            <td>{{ override.user.email }}</td>
+            <td>{{ override.get_override_type_display }}</td>
+            <td>{% if override.reduced_minimum_amount_cents %}{{ override.reduced_minimum_amount_cents|cents }}{% else %}----{% endif %}</td>
+            <td>{{ override.note|default:"----" }}</td>
+            <td>
+              <form class="inline-form" method="post" action="{% url 'adminui:camp-year-edit' camp_year.year %}#tax-overrides">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="tax_override_delete">
+                <input type="hidden" name="override_id" value="{{ override.id }}">
+                <button type="submit" class="secondary-button">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No tax overrides configured for {{ camp_year.year }}.</p>
+    {% endif %}
+
+    <h3>Create Tax Override</h3>
+    <form method="post" action="{% url 'adminui:camp-year-edit' camp_year.year %}#tax-overrides" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="tax_override">
+      {{ tax_override_form.non_field_errors }}
+      <div class="form-row" data-user-combobox>
+        {{ tax_override_form.user.label_tag }}
+        {{ tax_override_form.user }}
+        <p class="help-text">Start typing a member name, then choose a suggestion.</p>
+        {{ tax_override_form.user.errors }}
+      </div>
+      <div class="form-grid">
+        <div class="form-row">
+          {{ tax_override_form.override_type.label_tag }}
+          {{ tax_override_form.override_type }}
+          {{ tax_override_form.override_type.errors }}
+        </div>
+        <div class="form-row">
+          {{ tax_override_form.reduced_minimum_amount_dollars.label_tag }}
+          {{ tax_override_form.reduced_minimum_amount_dollars }}
+          {{ tax_override_form.reduced_minimum_amount_dollars.errors }}
+        </div>
+      </div>
+      <div class="form-row">
+        {{ tax_override_form.note.label_tag }}
+        {{ tax_override_form.note }}
+        {{ tax_override_form.note.errors }}
+      </div>
+      <button type="submit">Create Tax Override</button>
+    </form>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/admin-camp.js' %}" defer></script>
+{% endblock %}
