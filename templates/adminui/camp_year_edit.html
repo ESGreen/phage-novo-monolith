@@ -51,7 +51,7 @@
         <tbody>
         {% for tier in tax_tiers %}
           <tr>
-            <td>{{ tier.name }}</td>
+            <td><a class="secondary-button" href="{% url 'adminui:camp-tax-tier-edit' camp_year.year tier.id %}">Edit: {{ tier.name }}</a></td>
             <td>{{ tier.start_date|date:"Y-m-d" }}</td>
             <td>{{ tier.expiration_date|date:"Y-m-d" }}</td>
             <td>{{ tier.minimum_amount_cents|cents }}</td>
@@ -62,7 +62,7 @@
                     {% csrf_token %}
                     <input type="hidden" name="action" value="tax_tier_move_up">
                     <input type="hidden" name="item_id" value="{{ tier.id }}">
-                    <button type="submit" class="secondary-button">Move up</button>
+                    <button type="submit" class="secondary-button icon-button" aria-label="Move tax tier up" title="Move up">▲</button>
                   </form>
                 {% endif %}
                 {% if not forloop.last %}
@@ -70,7 +70,7 @@
                     {% csrf_token %}
                     <input type="hidden" name="action" value="tax_tier_move_down">
                     <input type="hidden" name="item_id" value="{{ tier.id }}">
-                    <button type="submit" class="secondary-button">Move down</button>
+                    <button type="submit" class="secondary-button icon-button" aria-label="Move tax tier down" title="Move down">▼</button>
                   </form>
                 {% endif %}
               </div>
@@ -135,7 +135,7 @@
         <tbody>
         {% for add_on in tax_add_ons %}
           <tr>
-            <td>{{ add_on.name }}</td>
+            <td><a class="secondary-button" href="{% url 'adminui:camp-tax-add-on-edit' camp_year.year add_on.id %}">Edit: {{ add_on.name }}</a></td>
             <td>{{ add_on.start_date|date:"Y-m-d" }}</td>
             <td>{{ add_on.expiration_date|date:"Y-m-d" }}</td>
             <td>{{ add_on.amount_cents|cents }}</td>
@@ -146,7 +146,7 @@
                     {% csrf_token %}
                     <input type="hidden" name="action" value="tax_add_on_move_up">
                     <input type="hidden" name="item_id" value="{{ add_on.id }}">
-                    <button type="submit" class="secondary-button">Move up</button>
+                    <button type="submit" class="secondary-button icon-button" aria-label="Move tax add-on up" title="Move up">▲</button>
                   </form>
                 {% endif %}
                 {% if not forloop.last %}
@@ -154,7 +154,7 @@
                     {% csrf_token %}
                     <input type="hidden" name="action" value="tax_add_on_move_down">
                     <input type="hidden" name="item_id" value="{{ add_on.id }}">
-                    <button type="submit" class="secondary-button">Move down</button>
+                    <button type="submit" class="secondary-button icon-button" aria-label="Move tax add-on down" title="Move down">▼</button>
                   </form>
                 {% endif %}
               </div>
@@ -228,7 +228,7 @@
                 {% csrf_token %}
                 <input type="hidden" name="action" value="tax_override_delete">
                 <input type="hidden" name="override_id" value="{{ override.id }}">
-                <button type="submit" class="secondary-button">Delete</button>
+                <button type="submit" class="danger-button">Delete</button>
               </form>
             </td>
           </tr>

@@ -285,6 +285,78 @@ def camp_year_edit(request: HttpRequest, year: int) -> HttpResponse:
 
 
 @admin_required
+def camp_tax_tier_edit(request: HttpRequest, year: int, tier_id: int) -> HttpResponse:
+    tax_tier = get_object_or_404(
+        TaxTier.objects.select_related("camp_year"),
+        pk=tier_id,
+        camp_year__year=year,
+    )
+    form = TaxTierCreateForm(
+        request.POST or None,
+        camp_year=tax_tier.camp_year,
+        instance=tax_tier,
+    )
+    if request.method == "POST":
+        if request.POST.get("action") == "delete":
+            camp_year = tax_tier.camp_year
+            tax_tier.delete()
+            messages.success(request, "Tax tier deleted.")
+            return redirect(_camp_year_section_url(camp_year, "tax-tiers"))
+        if form.is_valid():
+            updated_tier = form.save(commit=False)
+            updated_tier.updated_by = request.user
+            updated_tier.save()
+            messages.success(request, "Tax tier updated.")
+            return redirect(_camp_year_section_url(tax_tier.camp_year, "tax-tiers"))
+
+    return render(
+        request,
+        "adminui/camp_tax_tier_edit.html",
+        {
+            "camp_year": tax_tier.camp_year,
+            "form": form,
+            "tax_tier": tax_tier,
+        },
+    )
+
+
+@admin_required
+def camp_tax_add_on_edit(request: HttpRequest, year: int, add_on_id: int) -> HttpResponse:
+    tax_add_on = get_object_or_404(
+        TaxAddOn.objects.select_related("camp_year"),
+        pk=add_on_id,
+        camp_year__year=year,
+    )
+    form = TaxAddOnCreateForm(
+        request.POST or None,
+        camp_year=tax_add_on.camp_year,
+        instance=tax_add_on,
+    )
+    if request.method == "POST":
+        if request.POST.get("action") == "delete":
+            camp_year = tax_add_on.camp_year
+            tax_add_on.delete()
+            messages.success(request, "Tax add-on deleted.")
+            return redirect(_camp_year_section_url(camp_year, "tax-add-ons"))
+        if form.is_valid():
+            updated_add_on = form.save(commit=False)
+            updated_add_on.updated_by = request.user
+            updated_add_on.save()
+            messages.success(request, "Tax add-on updated.")
+            return redirect(_camp_year_section_url(tax_add_on.camp_year, "tax-add-ons"))
+
+    return render(
+        request,
+        "adminui/camp_tax_add_on_edit.html",
+        {
+            "camp_year": tax_add_on.camp_year,
+            "form": form,
+            "tax_add_on": tax_add_on,
+        },
+    )
+
+
+@admin_required
 def payments(request: HttpRequest) -> HttpResponse:
     return render(
         request,

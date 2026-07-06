@@ -537,8 +537,12 @@ table {
 
 .secondary-button {
   border: 1px solid var(--highlight);
+  border-radius: 0.4rem;
   color: var(--text);
+  display: inline-flex;
+  font-weight: 700;
   padding: 0.55rem 0.75rem;
+  text-decoration: none;
 }
 
 .secondary-button:hover,
@@ -546,6 +550,28 @@ table {
   background: #b5772f;
   border-color: #b5772f;
   color: var(--text);
+}
+
+.danger-card {
+  border-color: var(--action);
+}
+
+.danger-button {
+  background: var(--action);
+  border: 1px solid var(--action);
+  border-radius: 0.4rem;
+  color: #fff;
+  display: inline-flex;
+  font-weight: 700;
+  padding: 0.55rem 0.75rem;
+  text-decoration: none;
+}
+
+.danger-button:hover,
+.danger-button:focus {
+  background: var(--action-dark);
+  border-color: var(--action-dark);
+  color: #fff;
 }
 
 .sort-button:hover,
@@ -591,6 +617,13 @@ td {
 
 .order-actions .inline-form button {
   margin-left: 0;
+}
+
+.icon-button {
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  padding: 0.45rem 0.65rem;
 }
 
 @media (max-width: 700px) {

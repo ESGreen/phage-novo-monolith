@@ -8,7 +8,7 @@
     <p>Current mode: <strong>{{ site_settings.stripe_mode }}</strong></p>
     <form method="post">{% csrf_token %}<input type="hidden" name="action" value="switch_mode"><button name="stripe_mode" value="test" type="submit">Switch To Test Mode</button> <button name="stripe_mode" value="live" type="submit">Switch To Live Mode</button></form>
     <p>Test payments: {{ test_payment_count }}</p>
-    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete_test_payments"><input type="hidden" name="confirm" value="delete"><button type="submit">Delete Test Payments</button></form>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="delete_test_payments"><input type="hidden" name="confirm" value="delete"><button type="submit" class="danger-button">Delete Test Payments</button></form>
     <h2>Recent Logs</h2>
     <ul>{% for log in logs %}<li>{{ log.level }} {{ log.event_type }}</li>{% endfor %}</ul>
   </section>

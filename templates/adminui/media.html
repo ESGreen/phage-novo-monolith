@@ -5,7 +5,7 @@
 {% block content %}
   <section class="content-card">
     <h1>Media</h1>
-    <ul>{% for media_item in media_items %}<li>{{ media_item.title }} {{ media_item.url }} <form method="post" class="inline-form">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="media_id" value="{{ media_item.id }}"><button type="submit">Delete</button></form></li>{% endfor %}</ul>
+    <ul>{% for media_item in media_items %}<li>{{ media_item.title }} {{ media_item.url }} <form method="post" class="inline-form">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="media_id" value="{{ media_item.id }}"><button type="submit" class="danger-button">Delete</button></form></li>{% endfor %}</ul>
     <form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="action" value="upload">{{ form.as_p }}<button type="submit">Create</button></form>
   </section>
 {% endblock %}

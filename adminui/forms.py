@@ -140,11 +140,19 @@ def _dollars_to_cents(amount: Decimal) -> int:
     return int((amount * Decimal("100")).quantize(Decimal("1")))
 
 
+def _cents_to_dollars(amount_cents: int) -> Decimal:
+    return (Decimal(amount_cents) / Decimal("100")).quantize(Decimal("0.01"))
+
+
 def _date_to_midnight(value) -> datetime:
     return timezone.make_aware(
         datetime.combine(value, time.min),
         timezone.get_current_timezone(),
     )
+
+
+def _local_date(value: datetime):
+    return timezone.localtime(value).date()
 
 
 def _set_blank_page_labels(form: forms.Form) -> None:
@@ -246,7 +254,16 @@ class TaxTierCreateForm(forms.ModelForm):
 
     def __init__(self, *args: object, camp_year: CampYear, **kwargs: object) -> None:
         self.camp_year = camp_year
-        super().__init__(*args, **kwargs)
+        instance = kwargs.get("instance")
+        initial = kwargs.pop("initial", {}).copy()
+        if instance is not None and instance.pk:
+            initial.setdefault(
+                "minimum_amount_dollars",
+                _cents_to_dollars(instance.minimum_amount_cents),
+            )
+            initial.setdefault("start_date", _local_date(instance.start_date))
+            initial.setdefault("expiration_date", _local_date(instance.expiration_date))
+        super().__init__(*args, initial=initial, **kwargs)
         self.instance.camp_year = camp_year
 
     def clean(self) -> dict[str, object]:
@@ -300,7 +317,13 @@ class TaxAddOnCreateForm(forms.ModelForm):
 
     def __init__(self, *args: object, camp_year: CampYear, **kwargs: object) -> None:
         self.camp_year = camp_year
-        super().__init__(*args, **kwargs)
+        instance = kwargs.get("instance")
+        initial = kwargs.pop("initial", {}).copy()
+        if instance is not None and instance.pk:
+            initial.setdefault("amount_dollars", _cents_to_dollars(instance.amount_cents))
+            initial.setdefault("start_date", _local_date(instance.start_date))
+            initial.setdefault("expiration_date", _local_date(instance.expiration_date))
+        super().__init__(*args, initial=initial, **kwargs)
         self.instance.camp_year = camp_year
 
     def clean(self) -> dict[str, object]:

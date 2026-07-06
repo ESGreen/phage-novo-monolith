@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import time, timedelta
+from datetime import datetime, time, timedelta
 from io import BytesIO
 
 import pytest
@@ -49,19 +49,29 @@ def png_upload(name: str = "image.png") -> SimpleUploadedFile:
     return SimpleUploadedFile(name, output.getvalue(), content_type="image/png")
 
 
+def local_midnight(year: int, month: int, day: int):
+    return timezone.make_aware(
+        datetime(year, month, day),
+        timezone.get_current_timezone(),
+    )
+
+
 def create_tax_tier(
     camp_year: CampYear,
     *,
     name: str = "Standard",
     display_order: int = 1,
+    expiration_date=None,
+    minimum_amount_cents: int = 10000,
+    start_date=None,
 ) -> TaxTier:
     now = timezone.now()
     return TaxTier.objects.create(
         camp_year=camp_year,
         name=name,
-        minimum_amount_cents=10000,
-        start_date=now,
-        expiration_date=now + timedelta(days=30),
+        minimum_amount_cents=minimum_amount_cents,
+        start_date=start_date or now,
+        expiration_date=expiration_date or now + timedelta(days=30),
         display_order=display_order,
     )
 
@@ -69,16 +79,19 @@ def create_tax_tier(
 def create_tax_add_on(
     camp_year: CampYear,
     *,
+    amount_cents: int = 2500,
     name: str = "Hoodie",
     display_order: int = 1,
+    expiration_date=None,
+    start_date=None,
 ) -> TaxAddOn:
     now = timezone.now()
     return TaxAddOn.objects.create(
         camp_year=camp_year,
         name=name,
-        amount_cents=2500,
-        start_date=now,
-        expiration_date=now + timedelta(days=30),
+        amount_cents=amount_cents,
+        start_date=start_date or now,
+        expiration_date=expiration_date or now + timedelta(days=30),
         display_order=display_order,
     )
 
@@ -592,6 +605,120 @@ def test_admin_can_create_year_scoped_tax_tier_with_dollar_amount(client) -> Non
     assert tax_tier.updated_by == admin
 
 
+def test_admin_tax_tier_edit_loads_prepopulated_form(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    camp_year = CampYear.objects.create(year=2026)
+    tax_tier = create_tax_tier(
+        camp_year,
+        name="Standard",
+        minimum_amount_cents=12550,
+        start_date=local_midnight(2026, 1, 1),
+        expiration_date=local_midnight(2026, 3, 1),
+    )
+    tax_tier.description = "Standard taxes"
+    tax_tier.save(update_fields=["description", "updated_at"])
+    client.force_login(admin)
+
+    response = client.get(f"/admin/camp/2026/tax-tier/{tax_tier.id}/")
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert "Edit Tax Tier: Standard" in body
+    assert 'value="Standard"' in body
+    assert 'value="125.50"' in body
+    assert 'value="2026-01-01"' in body
+    assert 'value="2026-03-01"' in body
+    assert "Standard taxes" in body
+    assert "display_order" not in body
+    assert 'href="/admin/camp/2026/#tax-tiers"' in body
+    assert "Delete Tax Tier" in body
+    assert 'class="danger-button"' in body
+
+
+def test_admin_can_update_tax_tier(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    creator = create_user(email="creator@example.com", is_admin=True)
+    camp_year = CampYear.objects.create(year=2026)
+    tax_tier = TaxTier.objects.create(
+        camp_year=camp_year,
+        name="Standard",
+        description="Old description",
+        minimum_amount_cents=10000,
+        start_date=local_midnight(2026, 1, 1),
+        expiration_date=local_midnight(2026, 3, 1),
+        display_order=4,
+        created_by=creator,
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        f"/admin/camp/2026/tax-tier/{tax_tier.id}/",
+        {
+            "name": "Updated Standard",
+            "description": "Updated description",
+            "minimum_amount_dollars": "150.25",
+            "start_date": "2026-02-01",
+            "expiration_date": "2026-04-01",
+        },
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == "/admin/camp/2026/#tax-tiers"
+    tax_tier.refresh_from_db()
+    assert tax_tier.name == "Updated Standard"
+    assert tax_tier.description == "Updated description"
+    assert tax_tier.minimum_amount_cents == 15025
+    assert timezone.localtime(tax_tier.start_date).date().isoformat() == "2026-02-01"
+    assert timezone.localtime(tax_tier.expiration_date).date().isoformat() == "2026-04-01"
+    assert tax_tier.display_order == 4
+    assert tax_tier.created_by == creator
+    assert tax_tier.updated_by == admin
+
+
+def test_admin_cannot_edit_tax_tier_from_another_year(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    CampYear.objects.create(year=2026)
+    other_year = CampYear.objects.create(year=2027)
+    tax_tier = create_tax_tier(other_year)
+    client.force_login(admin)
+
+    response = client.get(f"/admin/camp/2026/tax-tier/{tax_tier.id}/")
+
+    assert response.status_code == 404
+
+
+def test_admin_can_delete_tax_tier(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    camp_year = CampYear.objects.create(year=2026)
+    tax_tier = create_tax_tier(camp_year)
+    client.force_login(admin)
+
+    response = client.post(
+        f"/admin/camp/2026/tax-tier/{tax_tier.id}/",
+        {"action": "delete"},
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == "/admin/camp/2026/#tax-tiers"
+    assert not TaxTier.objects.filter(pk=tax_tier.pk).exists()
+
+
+def test_admin_cannot_delete_tax_tier_from_another_year(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    CampYear.objects.create(year=2026)
+    other_year = CampYear.objects.create(year=2027)
+    tax_tier = create_tax_tier(other_year)
+    client.force_login(admin)
+
+    response = client.post(
+        f"/admin/camp/2026/tax-tier/{tax_tier.id}/",
+        {"action": "delete"},
+    )
+
+    assert response.status_code == 404
+    assert TaxTier.objects.filter(pk=tax_tier.pk).exists()
+
+
 def test_admin_can_create_year_scoped_tax_add_on_with_dollar_amount(client) -> None:
     admin = create_user(email="admin@example.com", is_admin=True)
     camp_year = CampYear.objects.create(year=2026)
@@ -623,11 +750,125 @@ def test_admin_can_create_year_scoped_tax_add_on_with_dollar_amount(client) -> N
     assert tax_add_on.updated_by == admin
 
 
+def test_admin_tax_add_on_edit_loads_prepopulated_form(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    camp_year = CampYear.objects.create(year=2026)
+    tax_add_on = create_tax_add_on(
+        camp_year,
+        name="Hoodie",
+        amount_cents=2550,
+        start_date=local_midnight(2026, 1, 1),
+        expiration_date=local_midnight(2026, 3, 1),
+    )
+    tax_add_on.description = "Camp hoodie"
+    tax_add_on.save(update_fields=["description", "updated_at"])
+    client.force_login(admin)
+
+    response = client.get(f"/admin/camp/2026/tax-add-on/{tax_add_on.id}/")
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert "Edit Tax Add-on: Hoodie" in body
+    assert 'value="Hoodie"' in body
+    assert 'value="25.50"' in body
+    assert 'value="2026-01-01"' in body
+    assert 'value="2026-03-01"' in body
+    assert "Camp hoodie" in body
+    assert "display_order" not in body
+    assert 'href="/admin/camp/2026/#tax-add-ons"' in body
+    assert "Delete Tax Add-on" in body
+    assert 'class="danger-button"' in body
+
+
+def test_admin_can_update_tax_add_on(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    creator = create_user(email="creator@example.com", is_admin=True)
+    camp_year = CampYear.objects.create(year=2026)
+    tax_add_on = TaxAddOn.objects.create(
+        camp_year=camp_year,
+        name="Hoodie",
+        description="Old description",
+        amount_cents=2500,
+        start_date=local_midnight(2026, 1, 1),
+        expiration_date=local_midnight(2026, 3, 1),
+        display_order=4,
+        created_by=creator,
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        f"/admin/camp/2026/tax-add-on/{tax_add_on.id}/",
+        {
+            "name": "Updated Hoodie",
+            "description": "Updated description",
+            "amount_dollars": "30.25",
+            "start_date": "2026-02-01",
+            "expiration_date": "2026-04-01",
+        },
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == "/admin/camp/2026/#tax-add-ons"
+    tax_add_on.refresh_from_db()
+    assert tax_add_on.name == "Updated Hoodie"
+    assert tax_add_on.description == "Updated description"
+    assert tax_add_on.amount_cents == 3025
+    assert timezone.localtime(tax_add_on.start_date).date().isoformat() == "2026-02-01"
+    assert timezone.localtime(tax_add_on.expiration_date).date().isoformat() == "2026-04-01"
+    assert tax_add_on.display_order == 4
+    assert tax_add_on.created_by == creator
+    assert tax_add_on.updated_by == admin
+
+
+def test_admin_cannot_edit_tax_add_on_from_another_year(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    CampYear.objects.create(year=2026)
+    other_year = CampYear.objects.create(year=2027)
+    tax_add_on = create_tax_add_on(other_year)
+    client.force_login(admin)
+
+    response = client.get(f"/admin/camp/2026/tax-add-on/{tax_add_on.id}/")
+
+    assert response.status_code == 404
+
+
+def test_admin_can_delete_tax_add_on(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    camp_year = CampYear.objects.create(year=2026)
+    tax_add_on = create_tax_add_on(camp_year)
+    client.force_login(admin)
+
+    response = client.post(
+        f"/admin/camp/2026/tax-add-on/{tax_add_on.id}/",
+        {"action": "delete"},
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == "/admin/camp/2026/#tax-add-ons"
+    assert not TaxAddOn.objects.filter(pk=tax_add_on.pk).exists()
+
+
+def test_admin_cannot_delete_tax_add_on_from_another_year(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    CampYear.objects.create(year=2026)
+    other_year = CampYear.objects.create(year=2027)
+    tax_add_on = create_tax_add_on(other_year)
+    client.force_login(admin)
+
+    response = client.post(
+        f"/admin/camp/2026/tax-add-on/{tax_add_on.id}/",
+        {"action": "delete"},
+    )
+
+    assert response.status_code == 404
+    assert TaxAddOn.objects.filter(pk=tax_add_on.pk).exists()
+
+
 def test_admin_camp_year_edit_renders_tax_tier_move_buttons_at_boundaries(client) -> None:
     admin = create_user(email="admin@example.com", is_admin=True)
     camp_year = CampYear.objects.create(year=2026)
     create_tax_tier(camp_year, name="Early", display_order=1)
-    create_tax_tier(camp_year, name="Late", display_order=2)
+    second = create_tax_tier(camp_year, name="Late", display_order=2)
     client.force_login(admin)
 
     response = client.get("/admin/camp/2026/")
@@ -636,6 +877,8 @@ def test_admin_camp_year_edit_renders_tax_tier_move_buttons_at_boundaries(client
     assert response.status_code == 200
     assert body.count('value="tax_tier_move_up"') == 1
     assert body.count('value="tax_tier_move_down"') == 1
+    assert f'href="/admin/camp/2026/tax-tier/{second.id}/"' in body
+    assert "Edit: Late" in body
 
 
 def test_admin_can_move_tax_tier_up(client) -> None:
@@ -677,7 +920,7 @@ def test_admin_camp_year_edit_renders_tax_add_on_move_buttons_at_boundaries(clie
     admin = create_user(email="admin@example.com", is_admin=True)
     camp_year = CampYear.objects.create(year=2026)
     create_tax_add_on(camp_year, name="Sticker", display_order=1)
-    create_tax_add_on(camp_year, name="Hoodie", display_order=2)
+    second = create_tax_add_on(camp_year, name="Hoodie", display_order=2)
     client.force_login(admin)
 
     response = client.get("/admin/camp/2026/")
@@ -686,6 +929,8 @@ def test_admin_camp_year_edit_renders_tax_add_on_move_buttons_at_boundaries(clie
     assert response.status_code == 200
     assert body.count('value="tax_add_on_move_up"') == 1
     assert body.count('value="tax_add_on_move_down"') == 1
+    assert f'href="/admin/camp/2026/tax-add-on/{second.id}/"' in body
+    assert "Edit: Hoodie" in body
 
 
 def test_admin_can_move_tax_add_on_down(client) -> None:
@@ -792,6 +1037,10 @@ def test_admin_can_delete_tax_override(client) -> None:
     )
     client.force_login(admin)
 
+    page_response = client.get("/admin/camp/2026/")
+    assert 'value="tax_override_delete"' in page_response.content.decode()
+    assert 'class="danger-button"' in page_response.content.decode()
+
     response = client.post(
         "/admin/camp/2026/",
         {"action": "tax_override_delete", "override_id": str(tax_override.id)},
@@ -837,6 +1086,8 @@ def test_admin_can_create_and_delete_content_page(client) -> None:
         },
     )
     page = ContentPage.objects.get(slug="arrival")
+    list_response = client.get("/admin/pages/")
+    assert 'class="danger-button"' in list_response.content.decode()
     delete_response = client.post(
         "/admin/pages/",
         {"action": "delete", "page_id": str(page.id)},
@@ -876,6 +1127,8 @@ def test_admin_cannot_delete_root_menu(client) -> None:
     admin = create_user(email="admin@example.com", is_admin=True)
     client.force_login(admin)
     root_menu, _ = Menu.objects.get_or_create(menu_name=Menu.ROOT_MENU_NAME)
+    list_response = client.get("/admin/menus/")
+    assert 'class="danger-button"' in list_response.content.decode()
 
     response = client.post(
         "/admin/menus/",
@@ -898,6 +1151,8 @@ def test_admin_can_upload_and_delete_media(client, settings, tmp_path) -> None:
         {"action": "upload", "title": "Map", "image": png_upload()},
     )
     media_item = MediaItem.objects.get(title="Map")
+    list_response = client.get("/admin/media/")
+    assert 'class="danger-button"' in list_response.content.decode()
     delete_response = client.post(
         "/admin/media/",
         {"action": "delete", "media_id": str(media_item.id)},
@@ -950,6 +1205,8 @@ def test_admin_test_payment_cleanup_leaves_live_payments(client) -> None:
         tax_tier_minimum_cents_snapshot=10000,
         checkout_expires_at=timezone.now() + timedelta(hours=1),
     )
+    page_response = client.get("/admin/stripe/")
+    assert 'class="danger-button"' in page_response.content.decode()
 
     response = client.post(
         "/admin/stripe/",

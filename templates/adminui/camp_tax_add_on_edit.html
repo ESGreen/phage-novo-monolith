@@ -1,0 +1,55 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Edit Tax Add-on: {{ tax_add_on.name }} - The Phage{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <h1>Edit Tax Add-on: {{ tax_add_on.name }}</h1>
+    <p><a href="{% url 'adminui:camp-year-edit' camp_year.year %}#tax-add-ons">Back to {{ camp_year.year }} tax add-ons</a></p>
+  </div>
+
+  <section class="content-card">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="form-grid">
+        <div class="form-row">
+          {{ form.name.label_tag }}
+          {{ form.name }}
+          {{ form.name.errors }}
+        </div>
+        <div class="form-row">
+          {{ form.amount_dollars.label_tag }}
+          {{ form.amount_dollars }}
+          {{ form.amount_dollars.errors }}
+        </div>
+        <div class="form-row">
+          {{ form.start_date.label_tag }}
+          {{ form.start_date }}
+          {{ form.start_date.errors }}
+        </div>
+        <div class="form-row">
+          {{ form.expiration_date.label_tag }}
+          {{ form.expiration_date }}
+          {{ form.expiration_date.errors }}
+        </div>
+      </div>
+      <div class="form-row">
+        {{ form.description.label_tag }}
+        {{ form.description }}
+        {{ form.description.errors }}
+      </div>
+      <button type="submit">Update Tax Add-on</button>
+    </form>
+  </section>
+
+  <section class="content-card danger-card">
+    <h2>Delete Tax Add-on</h2>
+    <p class="help-text">Delete this tax add-on if it should no longer be offered as an optional payment item.</p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="delete">
+      <button type="submit" class="danger-button">Delete Tax Add-on</button>
+    </form>
+  </section>
+{% endblock %}
