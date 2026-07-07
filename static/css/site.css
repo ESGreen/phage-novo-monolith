@@ -492,6 +492,13 @@ table {
   overflow-x: auto;
 }
 
+.truncated-cell {
+  max-width: 34rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .table-tools {
   align-items: end;
   display: flex;

@@ -1,0 +1,48 @@
+{% extends "admin_base.html" %}
+{% load static %}
+
+{% block title %}Edit Menu Item: {{ menu_item.label }} - The Phage{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <h1>Edit Menu Item: {{ menu_item.label }}</h1>
+    <p><a href="{% url 'adminui:menu-edit' menu.menu_name %}#menu-items">Back to {{ menu.menu_name }} menu items</a></p>
+  </div>
+
+  <section class="content-card">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="form-row">
+        {{ form.label.label_tag }}
+        {{ form.label }}
+        {{ form.label.errors }}
+      </div>
+      <div class="form-row">
+        {{ form.url.label_tag }}
+        {{ form.url }}
+        <p class="help-text">Start typing to see local URL suggestions, or enter any URL.</p>
+        {{ form.url.errors }}
+      </div>
+      <button type="submit">Update Menu Item</button>
+    </form>
+  </section>
+
+  <section class="content-card danger-card">
+    <h2>Delete Menu Item</h2>
+    <p class="help-text">Delete this item from the {{ menu.menu_name }} menu.</p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="delete">
+      <button type="submit" class="danger-button">Delete Menu Item</button>
+    </form>
+  </section>
+
+  <div hidden data-url-suggestions>
+    {% for url in url_suggestions %}<span data-url-suggestion="{{ url }}"></span>{% endfor %}
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/admin-menus.js' %}" defer></script>
+{% endblock %}

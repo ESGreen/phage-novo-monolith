@@ -5,14 +5,35 @@
 {% block content %}
   <section class="content-card">
     <h1>Menus</h1>
-    {% for menu in menus %}
-      <h2>{{ menu.menu_name }}</h2>
-      <form method="post" class="inline-form">{% csrf_token %}<input type="hidden" name="action" value="delete_menu"><input type="hidden" name="menu_id" value="{{ menu.id }}"><button type="submit" class="danger-button">Delete</button></form>
-      <ul>{% for item in menu.items.all %}<li>{{ item.display_order }} {{ item.label }} {{ item.url }}</li>{% endfor %}</ul>
-    {% endfor %}
+    {% if menus %}
+      <table>
+        <thead>
+          <tr>
+            <th>Menu</th>
+            <th>Items</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for menu in menus %}
+          <tr>
+            <td><a class="secondary-button" href="{% url 'adminui:menu-edit' menu.menu_name %}">Edit: {{ menu.menu_name }}</a></td>
+            <td class="truncated-cell" title="{{ menu.item_summary }}">{{ menu.item_summary }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No menus created.</p>
+    {% endif %}
+  </section>
+
+  <section class="content-card">
     <h2>Create Menu</h2>
-    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="create_menu">{{ menu_form.as_p }}<button type="submit">Create</button></form>
-    <h2>Create Menu Item</h2>
-    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="create_item">{{ item_form.as_p }}<button type="submit">Create</button></form>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_menu">
+      {{ menu_form.as_p }}
+      <button type="submit">Create Menu</button>
+    </form>
   </section>
 {% endblock %}

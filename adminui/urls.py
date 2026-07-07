@@ -24,6 +24,9 @@ urlpatterns = [
     path("admin/payments/", views.payments, name="payments"),
     path("admin/stripe/", views.stripe, name="stripe"),
     path("admin/pages/", views.pages, name="pages"),
+    path("admin/pages/<slug:slug>/", views.page_edit, name="page-edit"),
     path("admin/menus/", views.menus, name="menus"),
+    path("admin/menus/<slug:menu_name>/", views.menu_edit, name="menu-edit"),
+    path("admin/menu-items/<int:item_id>/", views.menu_item_edit, name="menu-item-edit"),
     path("admin/media/", views.media, name="media"),
 ]

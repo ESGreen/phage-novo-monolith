@@ -3,9 +3,59 @@
 {% block title %}Admin - The Phage{% endblock %}
 
 {% block content %}
-  <section class="content-card">
+  <div class="page-heading">
     <h1>Admin</h1>
+  </div>
+
+  <section class="content-card">
+    <h2>Current Status</h2>
     <p>Stripe mode: <strong>{{ site_settings.stripe_mode }}</strong></p>
     <p>Current camp year: <strong>{{ current_camp_year|default:"Not configured" }}</strong></p>
+  </section>
+
+  <section class="content-card">
+    <h2>Admin Sections</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Section</th>
+          <th>What You Can Do</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><a class="secondary-button" href="{% url 'adminui:users' %}">Users</a></td>
+          <td>Create member accounts, copy intro emails, edit profiles, update emails/passwords, and control active/admin access.</td>
+        </tr>
+        <tr>
+          <td><a class="secondary-button" href="{% url 'adminui:camp' %}">Camp</a></td>
+          <td>Manage camp years, dashboard pages, tax tiers, tax add-ons, and tax overrides for yearly setup.</td>
+        </tr>
+        <tr>
+          <td><a class="secondary-button" href="{% url 'adminui:payments' %}">Payments</a></td>
+          <td>Review payment records and recent payment logs to confirm payments and investigate issues.</td>
+        </tr>
+        <tr>
+          <td><a class="secondary-button" href="{% url 'adminui:stripe' %}">Stripe</a></td>
+          <td>Switch Stripe test/live mode, check Stripe configuration, and delete local test payments before going live.</td>
+        </tr>
+        <tr>
+          <td><a class="secondary-button" href="{% url 'adminui:pages' %}">Pages</a></td>
+          <td>Create and edit member Markdown content pages such as arrival info, policies, schedules, and instructions.</td>
+        </tr>
+        <tr>
+          <td><a class="secondary-button" href="{% url 'adminui:menus' %}">Menus</a></td>
+          <td>Manage member navigation menus and links to pages, menu groups, dashboard/tax pages, or external resources.</td>
+        </tr>
+        <tr>
+          <td><a class="secondary-button" href="{% url 'adminui:media' %}">Media</a></td>
+          <td>Upload and delete image media used by member content pages and profiles.</td>
+        </tr>
+        <tr>
+          <td><a class="secondary-button" href="/dashboard/">Member Site</a></td>
+          <td>Leave admin and open the member dashboard experience to check what members see.</td>
+        </tr>
+      </tbody>
+    </table>
   </section>
 {% endblock %}

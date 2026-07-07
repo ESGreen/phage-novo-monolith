@@ -124,6 +124,36 @@ def test_admin_sections_load_for_admin(client, url: str) -> None:
     assert response.status_code == 200
 
 
+def test_admin_home_renders_section_guide(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    CampYear.objects.create(year=2026)
+    client.force_login(admin)
+
+    response = client.get("/admin/")
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert "Current Status" in body
+    assert "Stripe mode:" in body
+    assert "Current camp year:" in body
+    assert 'href="/admin/users/"' in body
+    assert "Create member accounts" in body
+    assert 'href="/admin/camp/"' in body
+    assert "Manage camp years" in body
+    assert 'href="/admin/payments/"' in body
+    assert "Review payment records" in body
+    assert 'href="/admin/stripe/"' in body
+    assert "Switch Stripe test/live mode" in body
+    assert 'href="/admin/pages/"' in body
+    assert "Create and edit member Markdown content pages" in body
+    assert 'href="/admin/menus/"' in body
+    assert "Manage member navigation menus" in body
+    assert 'href="/admin/media/"' in body
+    assert "Upload and delete image media" in body
+    assert 'href="/dashboard/"' in body
+    assert "check what members see" in body
+
+
 def test_users_admin_renders_client_side_search_and_sort_controls(client) -> None:
     admin = create_user(email="admin@example.com", is_admin=True)
     create_user(email="Member@Example.com")
@@ -1072,7 +1102,27 @@ def test_admin_cannot_delete_tax_override_from_another_year(client) -> None:
     assert TaxOverride.objects.filter(pk=tax_override.pk).exists()
 
 
-def test_admin_can_create_and_delete_content_page(client) -> None:
+def test_pages_admin_lists_pages_in_table_and_separate_create_card(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    page = ContentPage.objects.create(
+        title="Arrival Info",
+        slug="arrival-info",
+        body_markdown="# Arrival",
+    )
+    client.force_login(admin)
+
+    response = client.get("/admin/pages/")
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert f'href="/admin/pages/{page.slug}/"' in body
+    assert "Edit: Arrival Info" in body
+    assert f'href="/pages/{page.slug}/"' in body
+    assert "Create Page" in body
+    assert 'class="danger-button"' not in body
+
+
+def test_admin_can_create_content_page(client) -> None:
     admin = create_user(email="admin@example.com", is_admin=True)
     client.force_login(admin)
 
@@ -1085,60 +1135,363 @@ def test_admin_can_create_and_delete_content_page(client) -> None:
             "body_markdown": "# Arrival",
         },
     )
-    page = ContentPage.objects.get(slug="arrival")
-    list_response = client.get("/admin/pages/")
-    assert 'class="danger-button"' in list_response.content.decode()
-    delete_response = client.post(
-        "/admin/pages/",
-        {"action": "delete", "page_id": str(page.id)},
-    )
 
     assert create_response.status_code == 302
-    assert delete_response.status_code == 302
-    assert not ContentPage.objects.filter(slug="arrival").exists()
+    page = ContentPage.objects.get(slug="arrival")
+    assert page.title == "Arrival"
 
 
-def test_admin_can_create_menu_and_menu_item(client) -> None:
+def test_admin_page_edit_loads_by_slug(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    ContentPage.objects.create(title="Arrival", slug="arrival", body_markdown="# Arrival")
+    client.force_login(admin)
+
+    response = client.get("/admin/pages/arrival/")
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert "Edit Page: Arrival" in body
+    assert 'value="Arrival"' in body
+    assert 'value="arrival"' in body
+    assert "# Arrival" in body
+    assert "Update and Back" in body
+    assert "Update and View" in body
+    assert "Delete Page" in body
+    assert 'class="danger-button"' in body
+
+
+def test_admin_page_edit_unknown_slug_returns_404(client) -> None:
     admin = create_user(email="admin@example.com", is_admin=True)
     client.force_login(admin)
 
-    create_menu_response = client.post(
-        "/admin/menus/",
-        {"action": "create_menu", "menu_name": "camp-info"},
+    response = client.get("/admin/pages/missing-page/")
+
+    assert response.status_code == 404
+
+
+def test_admin_can_update_page_and_back(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    page = ContentPage.objects.create(
+        title="Arrival",
+        slug="arrival",
+        body_markdown="# Arrival",
     )
-    menu = Menu.objects.get(menu_name="camp-info")
-    create_item_response = client.post(
-        "/admin/menus/",
+    client.force_login(admin)
+
+    response = client.post(
+        "/admin/pages/arrival/",
         {
-            "action": "create_item",
-            "menu": str(menu.id),
-            "label": "Arrival",
-            "url": "/pages/arrival/",
-            "display_order": "1",
+            "title": "Updated Arrival",
+            "slug": "updated-arrival",
+            "body_markdown": "# Updated",
+            "redirect_to": "back",
         },
     )
 
-    assert create_menu_response.status_code == 302
-    assert create_item_response.status_code == 302
-    assert MenuItem.objects.get(menu=menu).label == "Arrival"
+    assert response.status_code == 302
+    assert response["Location"] == "/admin/pages/"
+    page.refresh_from_db()
+    assert page.title == "Updated Arrival"
+    assert page.slug == "updated-arrival"
+    assert page.body_markdown == "# Updated"
+
+
+def test_admin_can_update_page_and_view(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    ContentPage.objects.create(title="Arrival", slug="arrival", body_markdown="# Arrival")
+    client.force_login(admin)
+
+    response = client.post(
+        "/admin/pages/arrival/",
+        {
+            "title": "Updated Arrival",
+            "slug": "updated-arrival",
+            "body_markdown": "# Updated",
+            "redirect_to": "view",
+        },
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == "/pages/updated-arrival/"
+
+
+def test_admin_page_edit_rejects_duplicate_slug(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    ContentPage.objects.create(title="Taken", slug="taken", body_markdown="Taken")
+    page = ContentPage.objects.create(title="Arrival", slug="arrival", body_markdown="# Arrival")
+    client.force_login(admin)
+
+    response = client.post(
+        "/admin/pages/arrival/",
+        {
+            "title": "Arrival",
+            "slug": "taken",
+            "body_markdown": "# Arrival",
+            "redirect_to": "back",
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"Content page with this Slug already exists." in response.content
+    page.refresh_from_db()
+    assert page.slug == "arrival"
+
+
+def test_admin_can_delete_content_page_from_edit_page(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    page = ContentPage.objects.create(title="Arrival", slug="arrival", body_markdown="# Arrival")
+    client.force_login(admin)
+
+    response = client.post("/admin/pages/arrival/", {"action": "delete"})
+
+    assert response.status_code == 302
+    assert response["Location"] == "/admin/pages/"
+    assert not ContentPage.objects.filter(pk=page.pk).exists()
+
+
+def test_admin_page_delete_protected_page_shows_error(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    page = ContentPage.objects.create(title="Arrival", slug="arrival", body_markdown="# Arrival")
+    CampYear.objects.create(year=2026, dashboard_pre_page=page)
+    client.force_login(admin)
+
+    response = client.post("/admin/pages/arrival/", {"action": "delete"}, follow=True)
+
+    assert response.status_code == 200
+    assert ContentPage.objects.filter(pk=page.pk).exists()
+    assert b"Page is in use and cannot be deleted." in response.content
+
+
+def test_menus_admin_lists_menus_with_item_summary_and_create_card(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    menu = Menu.objects.create(menu_name="camp-info")
+    MenuItem.objects.create(menu=menu, label="Arrival", url="/pages/arrival/", display_order=1)
+    MenuItem.objects.create(menu=menu, label="Packing", url="/pages/packing/", display_order=2)
+    client.force_login(admin)
+
+    response = client.get("/admin/menus/")
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert 'href="/admin/menus/camp-info/"' in body
+    assert "Edit: camp-info" in body
+    assert "Arrival, Packing" in body
+    assert "Create Menu" in body
+    assert "Create Menu Item" not in body
+
+
+def test_admin_can_create_menu(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    client.force_login(admin)
+
+    response = client.post(
+        "/admin/menus/",
+        {"action": "create_menu", "menu_name": "camp-info"},
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == "/admin/menus/camp-info/"
+    assert Menu.objects.filter(menu_name="camp-info").exists()
+
+
+def test_admin_menu_edit_loads_items_and_url_suggestions(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    CampYear.objects.create(year=2026)
+    ContentPage.objects.create(title="Arrival", slug="arrival", body_markdown="# Arrival")
+    root_menu, _ = Menu.objects.get_or_create(menu_name=Menu.ROOT_MENU_NAME)
+    camp_menu = Menu.objects.create(menu_name="camp-info")
+    MenuItem.objects.create(menu=root_menu, label="Arrival", url="/pages/arrival/", display_order=1)
+    client.force_login(admin)
+
+    response = client.get("/admin/menus/root/")
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert "Edit Menu: root" in body
+    assert 'href="/admin/menu-items/' in body
+    assert "Edit: Arrival" in body
+    assert "/pages/arrival/" in body
+    assert "The root menu cannot be deleted." in body
+    assert 'src="/static/js/admin-menus.js"' in body
+    assert 'data-url-combobox-input="true"' in body
+    assert 'data-url-suggestion="/dashboard/"' in body
+    assert 'data-url-suggestion="/2026/dashboard/"' in body
+    assert 'data-url-suggestion="/2026/taxes/"' in body
+    assert 'data-url-suggestion="/profile/"' in body
+    assert 'data-url-suggestion="/pages/arrival/"' in body
+    assert f'data-url-suggestion="/menu/{camp_menu.menu_name}/"' in body
+
+
+def test_admin_can_create_route_scoped_menu_item(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    menu = Menu.objects.create(menu_name="camp-info")
+    MenuItem.objects.create(
+        menu=menu,
+        label="Arrival",
+        url="/pages/arrival/",
+        display_order=1,
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        "/admin/menus/camp-info/",
+        {"action": "create_item", "label": "Packing", "url": "/pages/packing/"},
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == "/admin/menus/camp-info/#menu-items"
+    item = MenuItem.objects.get(menu=menu, label="Packing")
+    assert item.url == "/pages/packing/"
+    assert item.display_order == 2
+
+
+def test_admin_can_move_menu_item_up(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    menu = Menu.objects.create(menu_name="camp-info")
+    first = MenuItem.objects.create(
+        menu=menu,
+        label="Arrival",
+        url="/pages/arrival/",
+        display_order=1,
+    )
+    second = MenuItem.objects.create(
+        menu=menu,
+        label="Packing",
+        url="/pages/packing/",
+        display_order=2,
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        "/admin/menus/camp-info/",
+        {"action": "menu_item_move_up", "item_id": str(second.id)},
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == "/admin/menus/camp-info/#menu-items"
+    first.refresh_from_db()
+    second.refresh_from_db()
+    assert second.display_order == 1
+    assert first.display_order == 2
+
+
+def test_admin_cannot_move_menu_item_from_another_menu(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    menu = Menu.objects.create(menu_name="camp-info")
+    other_menu = Menu.objects.create(menu_name="other-info")
+    other_item = MenuItem.objects.create(
+        menu=other_menu,
+        label="Other",
+        url="/pages/other/",
+        display_order=1,
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        "/admin/menus/camp-info/",
+        {"action": "menu_item_move_up", "item_id": str(other_item.id)},
+    )
+
+    assert response.status_code == 404
+    assert Menu.objects.filter(pk=menu.pk).exists()
+
+
+def test_admin_can_delete_non_root_menu(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    menu = Menu.objects.create(menu_name="camp-info")
+    MenuItem.objects.create(
+        menu=menu,
+        label="Arrival",
+        url="/pages/arrival/",
+        display_order=1,
+    )
+    menu_id = menu.id
+    client.force_login(admin)
+
+    response = client.post("/admin/menus/camp-info/", {"action": "delete_menu"})
+
+    assert response.status_code == 302
+    assert response["Location"] == "/admin/menus/"
+    assert not Menu.objects.filter(pk=menu_id).exists()
+    assert not MenuItem.objects.filter(menu_id=menu_id).exists()
 
 
 def test_admin_cannot_delete_root_menu(client) -> None:
     admin = create_user(email="admin@example.com", is_admin=True)
-    client.force_login(admin)
     root_menu, _ = Menu.objects.get_or_create(menu_name=Menu.ROOT_MENU_NAME)
-    list_response = client.get("/admin/menus/")
-    assert 'class="danger-button"' in list_response.content.decode()
+    client.force_login(admin)
 
-    response = client.post(
-        "/admin/menus/",
-        {"action": "delete_menu", "menu_id": str(root_menu.id)},
-        follow=True,
-    )
+    get_response = client.get("/admin/menus/root/")
+    assert "The root menu cannot be deleted." in get_response.content.decode()
+
+    response = client.post("/admin/menus/root/", {"action": "delete_menu"}, follow=True)
 
     assert response.status_code == 200
     assert Menu.objects.filter(pk=root_menu.pk).exists()
     assert b"The root menu cannot be deleted." in response.content
+
+
+def test_admin_menu_item_edit_loads_form(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    menu = Menu.objects.create(menu_name="camp-info")
+    item = MenuItem.objects.create(
+        menu=menu,
+        label="Arrival",
+        url="/pages/arrival/",
+        display_order=1,
+    )
+    client.force_login(admin)
+
+    response = client.get(f"/admin/menu-items/{item.id}/")
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert "Edit Menu Item: Arrival" in body
+    assert 'value="Arrival"' in body
+    assert 'value="/pages/arrival/"' in body
+    assert 'href="/admin/menus/camp-info/#menu-items"' in body
+    assert "Delete Menu Item" in body
+
+
+def test_admin_can_update_menu_item(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    menu = Menu.objects.create(menu_name="camp-info")
+    item = MenuItem.objects.create(
+        menu=menu,
+        label="Arrival",
+        url="/pages/arrival/",
+        display_order=1,
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        f"/admin/menu-items/{item.id}/",
+        {"label": "Updated Arrival", "url": "https://example.com/arrival"},
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == "/admin/menus/camp-info/#menu-items"
+    item.refresh_from_db()
+    assert item.label == "Updated Arrival"
+    assert item.url == "https://example.com/arrival"
+
+
+def test_admin_can_delete_menu_item(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    menu = Menu.objects.create(menu_name="camp-info")
+    item = MenuItem.objects.create(
+        menu=menu,
+        label="Arrival",
+        url="/pages/arrival/",
+        display_order=1,
+    )
+    client.force_login(admin)
+
+    response = client.post(f"/admin/menu-items/{item.id}/", {"action": "delete"})
+
+    assert response.status_code == 302
+    assert response["Location"] == "/admin/menus/camp-info/#menu-items"
+    assert not MenuItem.objects.filter(pk=item.pk).exists()
 
 
 def test_admin_can_upload_and_delete_media(client, settings, tmp_path) -> None:

@@ -133,7 +133,8 @@ class MenuForm(forms.ModelForm):
 class MenuItemForm(forms.ModelForm):
     class Meta:
         model = MenuItem
-        fields = ["menu", "label", "url", "display_order"]
+        fields = ["label", "url"]
+        widgets = {"url": forms.TextInput(attrs={"data-url-combobox-input": "true"})}
 
 
 def _dollars_to_cents(amount: Decimal) -> int:

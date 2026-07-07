@@ -5,7 +5,35 @@
 {% block content %}
   <section class="content-card">
     <h1>Pages</h1>
-    <ul>{% for page in pages %}<li>{{ page.title }} <form method="post" class="inline-form">{% csrf_token %}<input type="hidden" name="action" value="delete"><input type="hidden" name="page_id" value="{{ page.id }}"><button type="submit" class="danger-button">Delete</button></form></li>{% endfor %}</ul>
-    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="create">{{ form.as_p }}<button type="submit">Create</button></form>
+    {% if pages %}
+      <table>
+        <thead>
+          <tr>
+            <th>Page</th>
+            <th>Slug</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for page in pages %}
+          <tr>
+            <td><a class="secondary-button" href="{% url 'adminui:page-edit' page.slug %}">Edit: {{ page.title }}</a></td>
+            <td><a href="{% url 'content:page-detail' page.slug %}">{{ page.slug }}</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No pages created.</p>
+    {% endif %}
+  </section>
+
+  <section class="content-card">
+    <h2>Create Page</h2>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create">
+      {{ form.as_p }}
+      <button type="submit">Create Page</button>
+    </form>
   </section>
 {% endblock %}

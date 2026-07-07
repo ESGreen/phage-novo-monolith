@@ -16,7 +16,7 @@ from accounts.models import User
 from accounts.permissions import admin_required
 from camp.models import CampYear, TaxAddOn, TaxOverride, TaxTier
 from camp.services import get_current_camp_year
-from content.models import ContentPage, MediaItem, Menu
+from content.models import ContentPage, MediaItem, Menu, MenuItem
 from core.models import SiteSettings
 from payments.models import Payment, PaymentLog
 
@@ -413,14 +413,6 @@ def pages(request: HttpRequest) -> HttpResponse:
                 form.save()
                 messages.success(request, "Page saved.")
                 return redirect("adminui:pages")
-        elif action == "delete":
-            page = get_object_or_404(ContentPage, pk=request.POST.get("page_id"))
-            try:
-                page.delete()
-                messages.success(request, "Page deleted.")
-            except ProtectedError:
-                messages.error(request, "Page is in use and cannot be deleted.")
-            return redirect("adminui:pages")
     return render(
         request,
         "adminui/pages.html",
@@ -429,39 +421,123 @@ def pages(request: HttpRequest) -> HttpResponse:
 
 
 @admin_required
+def page_edit(request: HttpRequest, slug: str) -> HttpResponse:
+    page = get_object_or_404(ContentPage, slug=slug)
+    form = ContentPageForm(request.POST or None, instance=page)
+
+    if request.method == "POST":
+        if request.POST.get("action") == "delete":
+            try:
+                page.delete()
+                messages.success(request, "Page deleted.")
+                return redirect("adminui:pages")
+            except ProtectedError:
+                messages.error(request, "Page is in use and cannot be deleted.")
+                return redirect("adminui:page-edit", slug=page.slug)
+
+        if form.is_valid():
+            updated_page = form.save()
+            messages.success(request, "Page updated.")
+            if request.POST.get("redirect_to") == "view":
+                return redirect(updated_page.get_absolute_url())
+            return redirect("adminui:pages")
+
+    return render(
+        request,
+        "adminui/page_edit.html",
+        {"form": form, "page": page},
+    )
+
+
+@admin_required
 def menus(request: HttpRequest) -> HttpResponse:
     Menu.objects.get_or_create(menu_name=Menu.ROOT_MENU_NAME)
     menu_form = MenuForm()
-    item_form = MenuItemForm()
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "create_menu":
             menu_form = MenuForm(request.POST)
             if menu_form.is_valid():
-                menu_form.save()
+                menu = menu_form.save()
                 messages.success(request, "Menu saved.")
-                return redirect("adminui:menus")
-        elif action == "create_item":
-            item_form = MenuItemForm(request.POST)
-            if item_form.is_valid():
-                item_form.save()
-                messages.success(request, "Menu item saved.")
-                return redirect("adminui:menus")
-        elif action == "delete_menu":
-            menu = get_object_or_404(Menu, pk=request.POST.get("menu_id"))
-            try:
-                menu.delete()
-                messages.success(request, "Menu deleted.")
-            except ValidationError as error:
-                messages.error(request, error.messages[0])
-            return redirect("adminui:menus")
+                return redirect("adminui:menu-edit", menu_name=menu.menu_name)
     return render(
         request,
         "adminui/menus.html",
         {
-            "menus": Menu.objects.prefetch_related("items"),
+            "menus": _menus_with_item_summaries(),
             "menu_form": menu_form,
+        },
+    )
+
+
+@admin_required
+def menu_edit(request: HttpRequest, menu_name: str) -> HttpResponse:
+    menu = get_object_or_404(Menu, menu_name=menu_name)
+    item_form = MenuItemForm()
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "create_item":
+            item_form = MenuItemForm(request.POST)
+            if item_form.is_valid():
+                item = item_form.save(commit=False)
+                item.menu = menu
+                item.display_order = _next_menu_item_display_order(menu)
+                item.save()
+                messages.success(request, "Menu item saved.")
+                return redirect(_menu_section_url(menu, "menu-items"))
+        elif action == "menu_item_move_up":
+            _move_menu_item(menu, request.POST.get("item_id"), "up")
+            return redirect(_menu_section_url(menu, "menu-items"))
+        elif action == "menu_item_move_down":
+            _move_menu_item(menu, request.POST.get("item_id"), "down")
+            return redirect(_menu_section_url(menu, "menu-items"))
+        elif action == "delete_menu":
+            try:
+                menu.delete()
+                messages.success(request, "Menu deleted.")
+                return redirect("adminui:menus")
+            except ValidationError as error:
+                messages.error(request, error.messages[0])
+                return redirect("adminui:menu-edit", menu_name=menu.menu_name)
+
+    return render(
+        request,
+        "adminui/menu_edit.html",
+        {
             "item_form": item_form,
+            "menu": menu,
+            "menu_items": menu.items.order_by("display_order", "id"),
+            "url_suggestions": _menu_url_suggestions(),
+        },
+    )
+
+
+@admin_required
+def menu_item_edit(request: HttpRequest, item_id: int) -> HttpResponse:
+    menu_item = get_object_or_404(MenuItem.objects.select_related("menu"), pk=item_id)
+    form = MenuItemForm(request.POST or None, instance=menu_item)
+
+    if request.method == "POST":
+        if request.POST.get("action") == "delete":
+            menu = menu_item.menu
+            menu_item.delete()
+            messages.success(request, "Menu item deleted.")
+            return redirect(_menu_section_url(menu, "menu-items"))
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Menu item updated.")
+            return redirect(_menu_section_url(menu_item.menu, "menu-items"))
+
+    return render(
+        request,
+        "adminui/menu_item_edit.html",
+        {
+            "form": form,
+            "menu": menu_item.menu,
+            "menu_item": menu_item,
+            "url_suggestions": _menu_url_suggestions(),
         },
     )
 
@@ -535,6 +611,70 @@ def _user_ids_by_camp_year(queryset) -> dict[int, set[int]]:
 
 def _camp_year_section_url(camp_year: CampYear, section_id: str) -> str:
     return reverse("adminui:camp-year-edit", kwargs={"year": camp_year.year}) + f"#{section_id}"
+
+
+def _menu_section_url(menu: Menu, section_id: str) -> str:
+    return reverse("adminui:menu-edit", kwargs={"menu_name": menu.menu_name}) + f"#{section_id}"
+
+
+def _menus_with_item_summaries() -> list[Menu]:
+    menus = list(Menu.objects.prefetch_related("items").order_by("menu_name"))
+    for menu in menus:
+        labels = [item.label for item in menu.items.all()]
+        menu.item_summary = ", ".join(labels) if labels else "----"
+    return menus
+
+
+def _menu_url_suggestions() -> list[str]:
+    suggestions = ["/dashboard/", "/profile/"]
+    current_year = get_current_camp_year()
+    if current_year is not None:
+        suggestions.extend(
+            [
+                reverse("camp:dashboard", kwargs={"year": current_year.year}),
+                reverse("camp:taxes", kwargs={"year": current_year.year}),
+            ],
+        )
+    suggestions.extend(page.get_absolute_url() for page in ContentPage.objects.order_by("slug"))
+    suggestions.extend(
+        reverse("content:menu-detail", kwargs={"menu_name": menu.menu_name})
+        for menu in Menu.objects.order_by("menu_name")
+    )
+    return list(dict.fromkeys(suggestions))
+
+
+def _next_menu_item_display_order(menu: Menu) -> int:
+    max_order = menu.items.aggregate(Max("display_order"))["display_order__max"]
+    return (max_order or 0) + 1
+
+
+def _move_menu_item(menu: Menu, item_id: str | None, direction: str) -> None:
+    with transaction.atomic():
+        item = get_object_or_404(
+            MenuItem.objects.select_for_update(),
+            pk=item_id,
+            menu=menu,
+        )
+        items = list(
+            MenuItem.objects.select_for_update()
+            .filter(menu=menu)
+            .order_by("display_order", "id"),
+        )
+        current_index = next(
+            index for index, candidate in enumerate(items) if candidate.pk == item.pk
+        )
+        if direction == "up" and current_index > 0:
+            swap_index = current_index - 1
+        elif direction == "down" and current_index < len(items) - 1:
+            swap_index = current_index + 1
+        else:
+            swap_index = current_index
+
+        items[current_index], items[swap_index] = items[swap_index], items[current_index]
+        for display_order, ordered_item in enumerate(items, start=1):
+            if ordered_item.display_order != display_order:
+                ordered_item.display_order = display_order
+                ordered_item.save(update_fields=["display_order", "updated_at"])
 
 
 def _next_display_order(model, camp_year: CampYear) -> int:

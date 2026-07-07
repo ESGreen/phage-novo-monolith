@@ -1,0 +1,99 @@
+{% extends "admin_base.html" %}
+{% load static %}
+
+{% block title %}Edit Menu: {{ menu.menu_name }} - The Phage{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <h1>Edit Menu: {{ menu.menu_name }}</h1>
+    <p><a href="{% url 'adminui:menus' %}">Back to menus</a></p>
+  </div>
+
+  <section id="menu-items" class="content-card">
+    <h2>Menu Items</h2>
+    {% if menu_items %}
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>URL</th>
+            <th>Order</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for item in menu_items %}
+          <tr>
+            <td><a class="secondary-button" href="{% url 'adminui:menu-item-edit' item.id %}">Edit: {{ item.label }}</a></td>
+            <td>{{ item.url }}</td>
+            <td>
+              <div class="order-actions">
+                {% if not forloop.first %}
+                  <form class="inline-form" method="post" action="{% url 'adminui:menu-edit' menu.menu_name %}#menu-items">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="menu_item_move_up">
+                    <input type="hidden" name="item_id" value="{{ item.id }}">
+                    <button type="submit" class="secondary-button icon-button" aria-label="Move menu item up" title="Move up">▲</button>
+                  </form>
+                {% endif %}
+                {% if not forloop.last %}
+                  <form class="inline-form" method="post" action="{% url 'adminui:menu-edit' menu.menu_name %}#menu-items">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="menu_item_move_down">
+                    <input type="hidden" name="item_id" value="{{ item.id }}">
+                    <button type="submit" class="secondary-button icon-button" aria-label="Move menu item down" title="Move down">▼</button>
+                  </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No menu items configured.</p>
+    {% endif %}
+  </section>
+
+  <section class="content-card">
+    <h2>Create Menu Item</h2>
+    <form method="post" action="{% url 'adminui:menu-edit' menu.menu_name %}#menu-items" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_item">
+      {{ item_form.non_field_errors }}
+      <div class="form-row">
+        {{ item_form.label.label_tag }}
+        {{ item_form.label }}
+        {{ item_form.label.errors }}
+      </div>
+      <div class="form-row">
+        {{ item_form.url.label_tag }}
+        {{ item_form.url }}
+        <p class="help-text">Start typing to see local URL suggestions, or enter any URL.</p>
+        {{ item_form.url.errors }}
+      </div>
+      <button type="submit">Create Menu Item</button>
+    </form>
+  </section>
+
+  <section class="content-card danger-card">
+    <h2>Delete Menu</h2>
+    {% if menu.menu_name == "root" %}
+      <p class="help-text">The root menu cannot be deleted.</p>
+    {% else %}
+      <p class="help-text">Delete this menu and all of its menu items.</p>
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete_menu">
+        <button type="submit" class="danger-button">Delete Menu</button>
+      </form>
+    {% endif %}
+  </section>
+
+  <div hidden data-url-suggestions>
+    {% for url in url_suggestions %}<span data-url-suggestion="{{ url }}"></span>{% endfor %}
+  </div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/admin-menus.js' %}" defer></script>
+{% endblock %}
