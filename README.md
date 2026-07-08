@@ -4,7 +4,9 @@ Django replacement for `thephage.org`.
 
 ## Current State
 
-Implementation is starting from the design and operational docs in `design_docs/` and `docs/`.
+Implementation is underway as a custom Django app. Maintainer runbooks live in `docs/`, and design/background notes live in `design_docs/`.
+
+Start with `docs/admin-ui.md` for the current custom admin UI and `docs/yearly-rollover.md` for annual setup.
 
 ## Local Setup
 

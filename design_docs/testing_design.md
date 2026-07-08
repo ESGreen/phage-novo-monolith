@@ -202,9 +202,12 @@ Automated tests should cover:
 - Dashboard renders post-checklist Markdown content when configured.
 - Dashboard shows required steps/checklist items.
 - Dashboard shows whether each required step is complete.
-- Dashboard shows payment status for the member/year.
-- Dashboard shows a taxes link when payment is available.
-- Dashboard does not show a payment action when payment is blocked or already complete.
+- Dashboard requires both profile photo and bio before the profile step is complete.
+- Dashboard locks future steps until earlier steps are complete.
+- Dashboard shows a taxes action only when taxes are the current step.
+- Dashboard displays paid and waived tax completion as `Taxes - Paid`.
+- Dashboard does not show a taxes action when taxes are already complete.
+- Dashboard shows the fully registered message when all steps are complete.
 
 If no camp year exists, `/dashboard/` should not crash.
 
@@ -299,6 +302,8 @@ Automated tests should cover:
 - The chosen tier determines the member's minimum payment.
 - A member can enter an amount greater than the chosen tier minimum.
 - A member cannot enter an amount below the chosen tier minimum.
+- Selecting a tier updates the visible minimum, tax amount input, and checkout summary with JavaScript.
+- The server enforces the minimum even without JavaScript.
 - Add-ons are available inside their start/expiration timestamp range.
 - Add-ons are not available before their start timestamp.
 - Add-ons are not available after their expiration timestamp.
@@ -334,6 +339,9 @@ Automated tests should cover:
 - A tax waived override marks the tax step complete for that user/year.
 - A tax waived override does not create a payment record by itself.
 - A user with a tax waived override should not be required to start Stripe Checkout.
+- A user with a tax waived override sees a `$0.00` tax tier.
+- A user with a tax waived override can still start checkout for selected add-ons.
+- A zero-dollar waived checkout is rejected.
 - A user with a tax waived override should see the dashboard tax step as complete.
 - A tax waived override applies only to the matching user.
 - A tax waived override applies only to the matching camp year.
@@ -357,7 +365,8 @@ Automated tests should cover:
 - Unavailable add-ons cannot be selected.
 - Expired tax tiers cannot be used.
 - A reduced minimum tax override is honored.
-- A tax waived override blocks checkout because no payment is required.
+- A tax waived override permits add-on-only checkout.
+- A tax waived override without add-ons does not create a zero-dollar checkout.
 - A member who has already paid for that camp year cannot start another checkout.
 - A member with an unexpired `created` payment for the same year cannot start another checkout.
 - A member with only expired `created` payments can start a new checkout.
@@ -581,8 +590,10 @@ Validation/error tests should cover:
 Happy-path tests should cover:
 
 - Admin can create a Markdown content page.
-- Admin can edit a Markdown content page.
-- Admin can delete a content page.
+- Admin can edit a Markdown content page from `/admin/pages/<slug>/`.
+- Admin can update and return to the pages overview.
+- Admin can update and view the member-facing page.
+- Admin can delete a content page from the page edit screen.
 
 Validation/error tests should cover:
 
@@ -596,9 +607,12 @@ Validation/error tests should cover:
 Happy-path tests should cover:
 
 - Admin can create a menu.
-- Admin can create a menu item.
-- Admin can edit menu item label, URL, menu, and display order.
-- Admin can delete a menu item.
+- Admin can open a menu-specific edit page at `/admin/menus/<menu_name>/`.
+- Admin can create a menu item scoped to that menu.
+- Admin can edit menu item label and URL from `/admin/menu-items/<item_id>/`.
+- Admin can reorder menu items with move up/down controls.
+- Admin can delete a menu item from its edit screen.
+- Admin can delete a non-root menu from its menu edit screen.
 - Internal URLs work as menu targets.
 - External URLs work as menu targets.
 - Menu-page URLs work as menu targets.
@@ -608,8 +622,8 @@ Validation/error tests should cover:
 - Duplicate menu name is rejected.
 - Empty label is rejected.
 - Empty URL is rejected.
-- Bad URL values are rejected.
-- Duplicate display order is handled by sorting alphabetically by label.
+- Root menu deletion is rejected.
+- A menu item from another menu cannot be reordered through the current menu route.
 
 ### Media Admin
 

@@ -363,7 +363,7 @@ def payments(request: HttpRequest) -> HttpResponse:
         "adminui/payments.html",
         {
             "payments": Payment.objects.select_related("user", "camp_year"),
-            "logs": PaymentLog.objects.select_related("payment")[:50],
+            "logs": PaymentLog.objects.select_related("payment", "payment__user")[:50],
         },
     )
 

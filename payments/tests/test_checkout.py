@@ -177,11 +177,12 @@ def test_checkout_allows_new_attempt_when_created_payment_expired(client, mocker
     assert Payment.objects.count() == 2
 
 
-def test_checkout_is_blocked_when_taxes_are_waived(client, mocker) -> None:
+def test_checkout_allows_waived_taxes_with_add_ons(client, mocker) -> None:
     user = create_user()
     client.force_login(user)
     camp_year = create_camp_year()
-    tier = create_tax_tier(camp_year)
+    create_tax_tier(camp_year)
+    add_on = create_tax_add_on(camp_year, name="Hoodie", amount=2500)
     TaxOverride.objects.create(
         user=user,
         camp_year=camp_year,
@@ -191,13 +192,21 @@ def test_checkout_is_blocked_when_taxes_are_waived(client, mocker) -> None:
 
     response = client.post(
         "/2026/taxes/",
-        {"tax_tier": str(tier.id), "tax_amount_dollars": "100.00", "add_ons": []},
+        {"tax_tier": "waived", "tax_amount_dollars": "0.00", "add_ons": [str(add_on.id)]},
     )
 
-    assert response.status_code == 200
-    assert b"Taxes Waived" in response.content
-    assert Payment.objects.count() == 0
-    create_mock.assert_not_called()
+    assert response.status_code == 302
+    assert response["Location"] == "https://checkout.example/cs_test_123"
+    payment = Payment.objects.get()
+    assert payment.tax_amount_cents == 0
+    assert payment.add_on_amount_cents == 2500
+    assert payment.total_amount_cents == 2500
+    assert payment.tax_tier_name_snapshot == "Waived Taxes"
+    assert payment.tax_tier_minimum_cents_snapshot == 0
+    assert PaymentAddOn.objects.get(payment=payment).name_snapshot == "Hoodie"
+    kwargs = create_mock.call_args.kwargs
+    assert len(kwargs["line_items"]) == 1
+    assert kwargs["line_items"][0]["price_data"]["unit_amount"] == 2500
 
 
 def test_checkout_return_page_never_marks_payment_paid(client) -> None:

@@ -8,7 +8,6 @@ from django.db import transaction
 from django.utils import timezone
 
 from camp.models import CampYear, TaxAddOn
-from camp.taxes import is_tax_waived
 from core.models import SiteSettings
 
 from . import stripe_client
@@ -45,18 +44,19 @@ def get_unexpired_created_payment(user: object, camp_year: CampYear) -> Payment 
 def create_tax_checkout(user: object, camp_year: CampYear, form) -> CheckoutResult:
     if get_paid_payment(user, camp_year) is not None:
         raise CheckoutBlocked("Taxes are already paid for this year.")
-    if is_tax_waived(user, camp_year):
-        raise CheckoutBlocked("Taxes are waived for this year.")
     if get_unexpired_created_payment(user, camp_year) is not None:
         raise CheckoutBlocked("A checkout session is already open for this year.")
 
-    tax_tier = form.cleaned_data["tax_tier"]
     selected_add_ons = list(form.cleaned_data.get("add_ons") or [])
     tax_amount_cents = form.cleaned_data["tax_amount_cents"]
     add_on_amount_cents = form.cleaned_data["add_on_amount_cents"]
     total_amount_cents = form.cleaned_data["total_amount_cents"]
     effective_minimum_cents = form.cleaned_data["effective_minimum_cents"]
+    tax_tier_name = form.cleaned_data["tax_tier_name_snapshot"]
     now = timezone.now()
+
+    if total_amount_cents <= 0:
+        raise CheckoutBlocked("No payment is needed unless you select an add-on.")
 
     with transaction.atomic():
         payment = Payment.objects.create(
@@ -67,7 +67,7 @@ def create_tax_checkout(user: object, camp_year: CampYear, form) -> CheckoutResu
             tax_amount_cents=tax_amount_cents,
             add_on_amount_cents=add_on_amount_cents,
             total_amount_cents=total_amount_cents,
-            tax_tier_name_snapshot=tax_tier.name,
+            tax_tier_name_snapshot=tax_tier_name,
             tax_tier_minimum_cents_snapshot=effective_minimum_cents,
             checkout_expires_at=now + timedelta(hours=1),
         )
@@ -128,18 +128,20 @@ def _line_items(
     payment: Payment,
     selected_add_ons: list[TaxAddOn],
 ) -> list[dict[str, object]]:
-    line_items: list[dict[str, object]] = [
-        {
-            "price_data": {
-                "currency": "usd",
-                "product_data": {
-                    "name": f"{camp_year.year} Camp Taxes - {payment.tax_tier_name_snapshot}",
+    line_items: list[dict[str, object]] = []
+    if payment.tax_amount_cents > 0:
+        line_items.append(
+            {
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {
+                        "name": f"{camp_year.year} Camp Taxes - {payment.tax_tier_name_snapshot}",
+                    },
+                    "unit_amount": payment.tax_amount_cents,
                 },
-                "unit_amount": payment.tax_amount_cents,
+                "quantity": 1,
             },
-            "quantity": 1,
-        }
-    ]
+        )
     for add_on in selected_add_ons:
         line_items.append(
             {

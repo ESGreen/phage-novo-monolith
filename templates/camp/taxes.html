@@ -1,5 +1,5 @@
 {% extends "member_base.html" %}
-{% load money %}
+{% load money static %}
 
 {% block title %}{{ camp_year.year }} Taxes - The Phage{% endblock %}
 
@@ -19,67 +19,87 @@
       <h2>Checkout Pending</h2>
       <p>A checkout session is already open. Complete it or wait for it to expire.</p>
     </section>
-  {% elif waived %}
-    <section class="content-card narrow-card">
-      <h2>Taxes Waived</h2>
-      <p>Your taxes are waived for {{ camp_year.year }}. No payment is required.</p>
-    </section>
-  {% elif not available_tiers %}
+  {% elif not form %}
     <section class="content-card narrow-card">
       <h2>Taxes Unavailable</h2>
       <p>Taxes are not currently available for {{ camp_year.year }}.</p>
     </section>
   {% else %}
-    <section class="content-card">
-      <h2>Available Tax Tiers</h2>
-      <p>Tax tiers are minimums. You may pay more than your selected tier minimum.</p>
-      {% if tax_override.override_type == "reduced_minimum" %}
-        <p>Your minimum has been reduced to {{ tax_override.reduced_minimum_amount_cents|cents }}.</p>
-      {% endif %}
-      <ul class="option-list">
-        {% for tier in available_tiers %}
-          <li>
-            <strong>{{ tier.name }}</strong>
-            <span>{{ tier.minimum_amount_cents|cents }} minimum</span>
-            {% if tier.description %}<p>{{ tier.description }}</p>{% endif %}
-          </li>
-        {% endfor %}
-      </ul>
-    </section>
-
-    <section class="content-card">
-      <h2>Start Checkout</h2>
-      <form method="post" novalidate>
+    <form method="post" data-tax-form novalidate>
+      <section class="content-card">
+        <h2>Tax Tier</h2>
+        <p>Tax tiers are minimums. You may pay more than your selected tier minimum.</p>
+        {% if tax_override %}
+          <p class="help-text">Your tax minimum has been adjusted for this year.</p>
+        {% endif %}
         {% csrf_token %}
         {{ form.non_field_errors }}
-        <fieldset>
-          <legend>Tax Tier</legend>
-          {{ form.tax_tier.errors }}
-          {{ form.tax_tier }}
-        </fieldset>
-        <div class="form-row">
+        {{ form.tax_tier.errors }}
+        <div class="tax-tier-grid">
+          {% for option in form.tax_options %}
+            <label class="tax-tier-card{% if option.key == form.selected_tax_option_key %} tax-tier-card--selected{% endif %}" data-tax-tier-card>
+              <input class="visually-hidden" type="radio" name="tax_tier" value="{{ option.key }}" data-tax-tier-input data-tax-minimum-cents="{{ option.minimum_amount_cents }}" data-tax-tier-name="{{ option.name }}"{% if option.key == form.selected_tax_option_key %} checked{% endif %}>
+              <span class="tax-tier-card__choice" data-tax-tier-choice>{% if option.key == form.selected_tax_option_key %}◉ Selected{% else %}○ Select{% endif %}</span>
+              <span class="tax-tier-card__name">{{ option.name }}</span>
+              <span class="tax-tier-card__amount">{{ option.minimum_amount_cents|cents }} minimum</span>
+              {% if option.description %}<span class="tax-tier-card__description">{{ option.description }}</span>{% endif %}
+            </label>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="content-card">
+        <h2>Optional Add-ons</h2>
+        {% if available_add_ons %}
+          {{ form.add_ons.errors }}
+          <div class="tax-add-on-grid">
+            {% for add_on in available_add_ons %}
+              <label class="tax-add-on-card{% if add_on.id in form.selected_add_on_ids %} tax-add-on-card--selected{% endif %}" data-tax-add-on-card>
+                <input type="checkbox" name="add_ons" value="{{ add_on.id }}" data-tax-add-on-input data-tax-add-on-cents="{{ add_on.amount_cents }}"{% if add_on.id in form.selected_add_on_ids %} checked{% endif %}>
+                <span class="tax-add-on-card__body">
+                  <span class="tax-add-on-card__heading">
+                    <strong>{{ add_on.name }}</strong>
+                    <span>{{ add_on.amount_cents|cents }}</span>
+                  </span>
+                  {% if add_on.description %}<span class="tax-add-on-card__description">{{ add_on.description }}</span>{% endif %}
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p>No add-ons are currently available.</p>
+        {% endif %}
+      </section>
+
+      <section class="content-card tax-summary-card">
+        <h2>Checkout Summary</h2>
+        <p>Minimum for selected tier: <strong data-tax-minimum-display>{{ form.selected_minimum_cents|cents }}</strong></p>
+        <div class="form-row tax-amount-row">
           {{ form.tax_amount_dollars.label_tag }}
           {{ form.tax_amount_dollars }}
           {{ form.tax_amount_dollars.errors }}
         </div>
-        {% if available_add_ons %}
-          <fieldset>
-            <legend>Add-ons</legend>
-            <ul class="option-list">
-              {% for add_on in available_add_ons %}
-                <li>
-                  <strong>{{ add_on.name }}</strong>
-                  <span>{{ add_on.amount_cents|cents }}</span>
-                  {% if add_on.description %}<p>{{ add_on.description }}</p>{% endif %}
-                </li>
-              {% endfor %}
-            </ul>
-            {{ form.add_ons.errors }}
-            {{ form.add_ons }}
-          </fieldset>
-        {% endif %}
+        <dl class="tax-summary-list">
+          <div>
+            <dt>Tax amount</dt>
+            <dd data-tax-amount-display>{{ form.selected_minimum_cents|cents }}</dd>
+          </div>
+          <div>
+            <dt>Add-ons</dt>
+            <dd data-tax-add-on-display>$0.00</dd>
+          </div>
+          <div class="tax-summary-list__total">
+            <dt>Total checkout</dt>
+            <dd data-tax-total-display>{{ form.selected_minimum_cents|cents }}</dd>
+          </div>
+        </dl>
+        <p class="help-text" data-tax-zero-message>No payment is needed unless you select an add-on.</p>
         <button type="submit">Start Checkout</button>
-      </form>
-    </section>
+      </section>
+    </form>
   {% endif %}
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/taxes.js' %}" defer></script>
 {% endblock %}

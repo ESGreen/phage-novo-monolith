@@ -483,11 +483,13 @@ Example:
 
 Purpose:
 
-- Show available tax tiers.
-- Show available add-ons.
+- Show available tax tiers as selectable cards.
+- Show available add-ons as checkbox cards.
 - Allow the member to enter a payment amount at or above their minimum.
 - Let the member start Stripe Checkout.
 - If already paid, show payment status instead of the payment action.
+- If reduced or waived tax override exists, show that override as the tax tier.
+- If waived, allow full-price add-on checkout but do not create a zero-dollar checkout.
 
 ### Payment Return
 
@@ -568,11 +570,13 @@ V1 does not require two-factor authentication. Passwords should follow the site 
 
 ## Admin Pages
 
-Admin pages can be implemented as conceptual sections inside Django admin or as custom admin pages, depending on which approach keeps the code simpler and easier to understand.
+Admin pages are custom product admin views under `/admin/`, separate from Django's built-in admin.
 
 Only users with `is_admin = true` may access admin pages.
 
 Admin pages should include clear navigation back to the member-facing site and to the other admin sections.
+
+The `The Phage Admin` title links back to `/admin/`; the admin nav does not need a duplicate Home item.
 
 ### Admin Home
 
@@ -712,6 +716,8 @@ This area should include:
 - Markdown body.
 - Optional year-specific page slug, such as `2026-arrival-info`.
 
+Existing pages are edited at `/admin/pages/<slug>/`. Page edit supports Update and Back, Update and View, and Delete Page.
+
 ### Menus Admin
 
 URL:
@@ -732,6 +738,8 @@ This area should include:
 - Menu item display order.
 - The required `root` menu.
 - Links to menu pages such as `/menu/camp-info/`.
+
+Menus are edited at `/admin/menus/<menu_name>/`. Menu items are edited at `/admin/menu-items/<item_id>/`. Admins change item order with move up/down controls rather than typing display-order values directly.
 
 ### Media Admin
 

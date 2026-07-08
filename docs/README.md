@@ -6,6 +6,7 @@ Start here when preparing, deploying, testing, or recovering the production site
 
 ## Core Runbooks
 
+- `admin-ui.md`: current maintainer UI workflows under `/admin/`.
 - `yearly-rollover.md`: yearly setup before opening taxes.
 - `pre-launch-checklist.md`: manual smoke test before opening taxes or after major changes.
 - `stripe.md`: Stripe test/live mode, payment verification, and troubleshooting.
@@ -17,7 +18,7 @@ Start here when preparing, deploying, testing, or recovering the production site
 - Real deployed config: `/etc/thephage/thephage.toml`.
 - Committed config example: `deploy/thephage.toml.example`.
 - Public static pages: `/public/`.
-- Member/admin site: Django.
+- Member/admin site: custom Django views and templates.
 
 ## Maintenance Rules
 

@@ -27,6 +27,8 @@ Use this runbook:
 
 ## Admin Sections Used
 
+The current admin UI workflow is described in `docs/admin-ui.md`.
+
 - `/admin/users/`
 - `/admin/camp/`
 - `/admin/payments/`
@@ -73,6 +75,8 @@ Go to `/admin/camp/`.
 
 Create the new camp year if it does not already exist.
 
+The camp overview lists existing years newest first and has a separate Create Camp Year card.
+
 Example:
 
 ```text
@@ -91,11 +95,11 @@ Do not create the new camp year until you are ready for it to become the current
 
 ## 3. Configure Year Dashboard Content
 
-Go to `/admin/camp/`.
+Go to `/admin/camp/`, then open the new year's edit page.
 
-Configure the year dashboard text.
+Configure the year dashboard page references.
 
-The dashboard has two Markdown content areas:
+The dashboard can render two admin-selected content pages:
 
 - Pre-checklist content.
 - Post-checklist content.
@@ -116,6 +120,10 @@ Verify:
 Go to `/admin/pages/`.
 
 Review existing member pages.
+
+Use the edit link for an existing page, or use the Create Page card for a new page.
+
+Page edit pages support updating and returning to the overview, or updating and opening the member-facing page.
 
 Update evergreen pages in place.
 
@@ -180,13 +188,19 @@ Verify:
 
 Go to `/admin/menus/`.
 
-Review the member menu.
+Review the menu overview, then open the menu that needs changes.
 
 The top-level member menu is the `root` menu.
 
 Menu items are labels plus URLs inside a named menu.
 
+Create menu items from the menu-specific edit page. Edit or delete an existing item from its item edit page.
+
+Use the `▲` and `▼` buttons to change item order.
+
 Menu items can link to member-only menu pages such as `/menu/camp-info/` to keep the top-level menu short.
+
+The URL field suggests common local URLs when JavaScript is available, but arbitrary internal or external URLs are allowed.
 
 Common menu targets:
 
@@ -201,7 +215,7 @@ https://external.example.com
 
 Verify:
 
-- Menu order is correct by display order, then label.
+- Menu order is correct.
 - Labels are clear.
 - Internal URLs work.
 - Menu page URLs work.
@@ -213,13 +227,17 @@ Verify:
 
 Go to `/admin/camp/`.
 
+Open the relevant camp year edit page and use the Tax Tiers section.
+
 Create tax tiers for the new year.
 
 Each tax tier is a minimum amount, not a fixed required payment.
 
 Members may pay more than the tier minimum.
 
-Each tax tier has a start timestamp and an expiration timestamp.
+Each tax tier has a start date and an end date.
+
+The admin form accepts dates only. Dates are saved internally as local-midnight timestamps.
 
 At least one available tax tier is required before members can pay.
 
@@ -228,14 +246,18 @@ Verify:
 - Tier names are clear.
 - Descriptions are clear.
 - Minimum amounts are correct.
-- Start timestamps are correct.
-- Expiration timestamps are correct.
-- Expiration timestamps are after start timestamps.
-- Display order is correct.
+- Start dates are correct.
+- End dates are correct.
+- End dates are after start dates.
+- Order is correct.
+
+Use the `▲` and `▼` buttons to reorder tiers. Use each tier's edit page to update or delete it.
 
 ## 9. Configure Tax Add-Ons
 
 Go to `/admin/camp/`.
+
+Open the relevant camp year edit page and use the Tax Add-ons section.
 
 Create any optional add-ons for the new year.
 
@@ -247,23 +269,31 @@ Porta contribution
 Supplies
 ```
 
-Each add-on has its own start timestamp and expiration timestamp.
+Each add-on has its own start date and end date.
+
+The admin form accepts dates only. Dates are saved internally as local-midnight timestamps.
 
 Verify:
 
 - Add-on names are clear.
 - Descriptions are clear.
 - Amounts are correct.
-- Start timestamps are correct.
-- Expiration timestamps are correct.
-- Expiration timestamps are after start timestamps.
-- Display order is correct.
+- Start dates are correct.
+- End dates are correct.
+- End dates are after start dates.
+- Order is correct.
+
+Use the `▲` and `▼` buttons to reorder add-ons. Use each add-on's edit page to update or delete it.
 
 ## 10. Configure Tax Overrides
 
 Go to `/admin/camp/`.
 
+Open the relevant camp year edit page and use the Tax Overrides section.
+
 Most members do not need tax overrides.
+
+The override user picker searches by member name and shows email for disambiguation.
 
 Create an override only for a special case.
 
@@ -289,6 +319,12 @@ Verify:
 Go to `/admin/users/`.
 
 Review users before opening taxes.
+
+Use the create-user card to add accounts. Use the existing-users table to search, sort, and open user edit pages.
+
+User edit pages have separate cards for flags, email, password, photo, and basic bio.
+
+Admins cannot edit their own account through the user edit page.
 
 New-user intro emails are rendered from `/home/evan/projects/newweb/templates/adminui/emails/new_user_intro.txt`.
 

@@ -12,7 +12,7 @@ from PIL import Image
 from camp.models import CampYear, TaxAddOn, TaxOverride, TaxTier
 from content.models import ContentPage, MediaItem, Menu, MenuItem
 from core.models import SiteSettings
-from payments.models import Payment
+from payments.models import Payment, PaymentLog
 
 pytestmark = pytest.mark.django_db
 
@@ -152,6 +152,58 @@ def test_admin_home_renders_section_guide(client) -> None:
     assert "Upload and delete image media" in body
     assert 'href="/dashboard/"' in body
     assert "check what members see" in body
+
+
+def test_payments_admin_renders_payment_and_log_tables(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    member = create_user(email="member@example.com")
+    camp_year = CampYear.objects.create(year=2026)
+    payment = Payment.objects.create(
+        user=member,
+        camp_year=camp_year,
+        status=Payment.Status.PAID,
+        stripe_mode=Payment.StripeMode.TEST,
+        tax_amount_cents=30000,
+        add_on_amount_cents=2500,
+        total_amount_cents=32500,
+        tax_tier_name_snapshot="Standard",
+        tax_tier_minimum_cents_snapshot=10000,
+        paid_at=timezone.now(),
+    )
+    payment_log = PaymentLog.objects.create(
+        payment=payment,
+        level=PaymentLog.Level.INFO,
+        event_type="checkout.create.success",
+        stripe_mode=Payment.StripeMode.TEST,
+        message="Stripe Checkout session created.",
+    )
+    PaymentLog.objects.create(
+        payment=None,
+        level=PaymentLog.Level.WARNING,
+        event_type="webhook.signature.failure",
+        message="Webhook signature verification failed.",
+    )
+    client.force_login(admin)
+
+    response = client.get("/admin/payments/")
+    body = response.content.decode()
+    log_timestamp = timezone.localtime(payment_log.created_at).strftime("%Y-%m-%d %H:%M:%S")
+
+    assert response.status_code == 200
+    assert body.count('<section class="content-card">') == 2
+    assert "<h1>Payments</h1>" in body
+    assert "<h2>Recent Logs</h2>" in body
+    assert "member@example.com" in body
+    assert "$300.00" in body
+    assert "$25.00" in body
+    assert "$325.00" in body
+    assert "Timestamp" in body
+    assert log_timestamp in body
+    assert "checkout.create.success" in body
+    assert "Stripe Checkout session created." in body
+    assert "webhook.signature.failure" in body
+    assert "Webhook signature verification failed." in body
+    assert "----" in body
 
 
 def test_users_admin_renders_client_side_search_and_sort_controls(client) -> None:

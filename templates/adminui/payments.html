@@ -1,16 +1,78 @@
 {% extends "admin_base.html" %}
+{% load money %}
 
 {% block title %}Payments Admin - The Phage{% endblock %}
 
 {% block content %}
   <section class="content-card">
     <h1>Payments</h1>
-    <table><tr><th>User</th><th>Year</th><th>Status</th><th>Mode</th><th>Tax</th><th>Add-ons</th><th>Total</th><th>Created</th><th>Paid</th></tr>
+    {% if payments %}
+    <table>
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Year</th>
+          <th>Status</th>
+          <th>Mode</th>
+          <th>Tax</th>
+          <th>Add-ons</th>
+          <th>Total</th>
+          <th>Created</th>
+          <th>Paid</th>
+        </tr>
+      </thead>
+      <tbody>
       {% for payment in payments %}
-        <tr><td>{{ payment.user.email }}</td><td>{{ payment.camp_year.year }}</td><td>{{ payment.status }}</td><td>{{ payment.stripe_mode }}</td><td>{{ payment.tax_amount_cents }}</td><td>{{ payment.add_on_amount_cents }}</td><td>{{ payment.total_amount_cents }}</td><td>{{ payment.created_at }}</td><td>{{ payment.paid_at }}</td></tr>
+        <tr>
+          <td>{{ payment.user.email }}</td>
+          <td>{{ payment.camp_year.year }}</td>
+          <td>{{ payment.get_status_display }}</td>
+          <td>{{ payment.get_stripe_mode_display }}</td>
+          <td>{{ payment.tax_amount_cents|cents }}</td>
+          <td>{{ payment.add_on_amount_cents|cents }}</td>
+          <td>{{ payment.total_amount_cents|cents }}</td>
+          <td>{{ payment.created_at|date:"Y-m-d H:i:s" }}</td>
+          <td>{% if payment.paid_at %}{{ payment.paid_at|date:"Y-m-d H:i:s" }}{% else %}----{% endif %}</td>
+        </tr>
       {% endfor %}
+      </tbody>
     </table>
+    {% else %}
+      <p>No payments recorded.</p>
+    {% endif %}
+  </section>
+
+  <section class="content-card">
     <h2>Recent Logs</h2>
-    <ul>{% for log in logs %}<li>{{ log.created_at }} {{ log.level }} {{ log.event_type }}</li>{% endfor %}</ul>
+    {% if logs %}
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Level</th>
+          <th>Event</th>
+          <th>User</th>
+          <th>Payment</th>
+          <th>Mode</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for log in logs %}
+        <tr>
+          <td>{{ log.created_at|date:"Y-m-d H:i:s" }}</td>
+          <td>{{ log.get_level_display }}</td>
+          <td>{{ log.event_type }}</td>
+          <td>{% if log.payment %}{{ log.payment.user.email }}{% else %}----{% endif %}</td>
+          <td>{% if log.payment %}{{ log.payment.id }}{% else %}----{% endif %}</td>
+          <td>{{ log.stripe_mode|default:"----" }}</td>
+          <td>{{ log.message|default:"----" }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <p>No payment logs recorded.</p>
+    {% endif %}
   </section>
 {% endblock %}

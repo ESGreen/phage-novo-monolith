@@ -6,7 +6,7 @@ The Phage website will be a Django-based website hosted at `thephage.org`.
 
 The purpose of the site is to give camp members one reliable place to handle yearly camp business, especially paying camp taxes, accessing camp information, and eventually completing yearly survey and roster workflows.
 
-The site should be simple to maintain. Most content changes should be possible through the Django admin without editing Django templates. The site is expected to change lightly, usually once per year.
+The site should be simple to maintain. Most member-site content changes should be possible through the custom product admin without editing Django templates. The site is expected to change lightly, usually once per year.
 
 ## Goals
 
@@ -74,7 +74,7 @@ Admins should be able to:
 - Set tax tiers and optional add-ons.
 - Set per-user tax overrides when needed.
 - See who has paid.
-- Edit public and private content pages.
+- Edit member content pages and update static public pages outside Django when needed.
 - Review Stripe payment records.
 
 ## Payment System
@@ -126,7 +126,7 @@ Expected yearly process:
 
 - Create new camp year.
 - Configure tax tiers and options.
-- Update public/private content pages.
+- Update member content pages and public static pages.
 - Create or update user accounts.
 - Open payments.
 - Review payment status.
@@ -196,7 +196,7 @@ Expected stack:
 
 - Django.
 - PostgreSQL.
-- Django admin.
+- Custom product admin views.
 - Django authentication.
 - Stripe Checkout.
 - Server-rendered templates.

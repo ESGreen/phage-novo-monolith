@@ -466,6 +466,137 @@ legend {
   margin: 0.25rem 0 0;
 }
 
+.tax-tier-grid,
+.tax-add-on-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+}
+
+.tax-tier-card,
+.tax-add-on-card {
+  background: #fffaf0;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  gap: 0.8rem;
+  padding: 1rem;
+}
+
+.tax-tier-card {
+  flex-direction: column;
+}
+
+.tax-tier-card:hover,
+.tax-tier-card:focus-within,
+.tax-add-on-card:hover,
+.tax-add-on-card:focus-within {
+  border-color: var(--highlight);
+  box-shadow: 0 0 0 3px rgb(198 138 56 / 18%);
+}
+
+.tax-tier-card--selected {
+  background: var(--success-bg);
+  border-color: var(--accent);
+}
+
+.tax-add-on-card--selected {
+  background: var(--success-bg);
+  border-color: var(--accent);
+}
+
+.tax-add-on-card--selected input {
+  accent-color: var(--accent);
+}
+
+.tax-tier-card__choice {
+  align-self: flex-start;
+  border: 1px solid var(--highlight);
+  border-radius: 999px;
+  color: var(--highlight);
+  font-weight: 800;
+  padding: 0.2rem 0.6rem;
+}
+
+.tax-tier-card--selected .tax-tier-card__choice {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tax-tier-card__name,
+.tax-tier-card__amount {
+  display: block;
+  font-weight: 800;
+}
+
+.tax-tier-card__name {
+  font-size: 1.15rem;
+}
+
+.tax-tier-card__amount {
+  color: var(--accent-dark);
+  font-size: 1.35rem;
+}
+
+.tax-tier-card__description,
+.tax-add-on-card__description {
+  color: var(--muted);
+  display: block;
+}
+
+.tax-add-on-card input {
+  flex: 0 0 auto;
+  margin-top: 0.25rem;
+}
+
+.tax-add-on-card__body,
+.tax-add-on-card__heading {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.tax-add-on-card__heading {
+  grid-template-columns: 1fr auto;
+}
+
+.tax-summary-card {
+  border-color: var(--highlight);
+}
+
+.tax-amount-row {
+  max-width: 18rem;
+}
+
+.tax-summary-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.tax-summary-list div {
+  align-items: baseline;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.tax-summary-list dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.tax-summary-list dd {
+  font-weight: 800;
+  margin: 0;
+}
+
+.tax-summary-list__total {
+  border-top: 1px solid var(--border);
+  font-size: 1.15rem;
+  padding-top: 0.5rem;
+}
+
 .status-list {
   list-style: none;
   margin: 0;
@@ -483,6 +614,116 @@ legend {
 
 .status-list li:first-child {
   border-top: 0;
+}
+
+.dashboard-list {
+  display: grid;
+  gap: 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard-item {
+  align-items: center;
+  border: 1px solid var(--border);
+  border-left: 0.45rem solid var(--border);
+  border-radius: 0.6rem;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr auto;
+  padding: 1rem;
+}
+
+.dashboard-item--current {
+  background: var(--error-bg);
+  border-left-color: var(--action);
+}
+
+.dashboard-item--complete {
+  background: var(--success-bg);
+  border-left-color: var(--accent);
+}
+
+.dashboard-item--locked {
+  background: #f1ede4;
+  color: var(--muted);
+}
+
+.dashboard-item__heading {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.dashboard-item__heading h3 {
+  margin: 0;
+}
+
+.dashboard-item__symbol {
+  font-weight: 800;
+}
+
+.dashboard-item__status {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  padding: 0.15rem 0.5rem;
+}
+
+.dashboard-item p {
+  margin: 0;
+}
+
+.dashboard-button {
+  background: var(--action);
+  border-radius: 0.4rem;
+  color: #fff;
+  display: inline-flex;
+  font-weight: 800;
+  justify-content: center;
+  padding: 0.7rem 1rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.dashboard-button:hover,
+.dashboard-button:focus {
+  background: var(--action-dark);
+  color: #fff;
+  text-decoration: none;
+}
+
+.dashboard-button--complete {
+  background: var(--accent);
+}
+
+.dashboard-button--complete:hover,
+.dashboard-button--complete:focus {
+  background: var(--accent-dark);
+}
+
+.dashboard-complete-message {
+  background: var(--highlight-soft);
+  border: 1px solid var(--highlight);
+  border-radius: 0.6rem;
+  font-weight: 800;
+  margin: 1rem 0 0;
+  padding: 0.85rem 1rem;
+}
+
+@media (max-width: 40rem) {
+  .dashboard-item {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-button {
+    white-space: normal;
+  }
 }
 
 table {

@@ -14,28 +14,28 @@
     </section>
   {% endif %}
 
-  <section class="content-card">
-    <h2>Checklist</h2>
-    <ul class="status-list">
-      <li>
-        <span>Profile</span>
-        <strong>Complete</strong>
-        <a href="{% url 'accounts:profile' %}">Edit profile</a>
-      </li>
-      <li>
-        <span>Taxes</span>
-        <strong>{{ tax_status }}</strong>
-        <a href="/{{ camp_year.year }}/taxes/">Tax page</a>
-      </li>
-    </ul>
-  </section>
-
-  <section class="content-card">
-    <h2>Quick Links</h2>
-    <ul>
-      <li><a href="{% url 'accounts:profile' %}">Profile</a></li>
-      <li><a href="/{{ camp_year.year }}/taxes/">Taxes</a></li>
-    </ul>
+  <section class="content-card dashboard-checklist">
+    <h2>Registration Checklist</h2>
+    <ol class="dashboard-list">
+      {% for item in dashboard_items %}
+        <li class="dashboard-item dashboard-item--{{ item.state }}">
+          <div class="dashboard-item__body">
+            <div class="dashboard-item__heading">
+              <span class="dashboard-item__symbol" aria-hidden="true">{{ item.symbol }}</span>
+              <h3>{{ item.title }}</h3>
+              <span class="dashboard-item__status">{{ item.status_label }}</span>
+            </div>
+            <p>{{ item.description }}</p>
+          </div>
+          {% if item.action_label %}
+            <a class="dashboard-button dashboard-button--{{ item.state }}" href="{{ item.action_url }}">{{ item.action_label }}</a>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ol>
+    {% if is_fully_registered %}
+      <p class="dashboard-complete-message">You are fully registered. Now all that's left is to get packing.</p>
+    {% endif %}
   </section>
 
   {% if post_html %}

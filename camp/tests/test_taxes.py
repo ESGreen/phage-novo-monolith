@@ -193,6 +193,22 @@ def test_tax_selection_form_accepts_amount_above_minimum_and_add_ons() -> None:
     assert form.cleaned_data["total_amount_cents"] == 15000
 
 
+def test_tax_selection_form_accepts_non_step_amount_above_minimum() -> None:
+    user = create_user()
+    camp_year = create_camp_year()
+    tier = create_tax_tier(camp_year, minimum_amount_cents=10000)
+    form = TaxSelectionForm(
+        {"tax_tier": str(tier.id), "tax_amount_dollars": "127.43", "add_ons": []},
+        user=user,
+        camp_year=camp_year,
+    )
+
+    assert form.is_valid(), form.errors
+    assert form.fields["tax_amount_dollars"].widget.attrs["step"] == "5.00"
+    assert form.cleaned_data["tax_amount_cents"] == 12743
+    assert form.cleaned_data["total_amount_cents"] == 12743
+
+
 def test_tax_selection_form_rejects_amount_below_minimum() -> None:
     user = create_user()
     camp_year = create_camp_year()
@@ -210,7 +226,7 @@ def test_tax_selection_form_rejects_amount_below_minimum() -> None:
 def test_tax_selection_form_honors_reduced_minimum() -> None:
     user = create_user()
     camp_year = create_camp_year()
-    tier = create_tax_tier(camp_year, minimum_amount_cents=10000)
+    create_tax_tier(camp_year, minimum_amount_cents=10000)
     TaxOverride.objects.create(
         user=user,
         camp_year=camp_year,
@@ -218,20 +234,62 @@ def test_tax_selection_form_honors_reduced_minimum() -> None:
         reduced_minimum_amount_cents=5000,
     )
     valid_form = TaxSelectionForm(
-        {"tax_tier": str(tier.id), "tax_amount_dollars": "75.00", "add_ons": []},
+        {"tax_tier": "override", "tax_amount_dollars": "75.00", "add_ons": []},
         user=user,
         camp_year=camp_year,
     )
     invalid_form = TaxSelectionForm(
-        {"tax_tier": str(tier.id), "tax_amount_dollars": "49.99", "add_ons": []},
+        {"tax_tier": "override", "tax_amount_dollars": "49.99", "add_ons": []},
         user=user,
         camp_year=camp_year,
     )
 
     assert valid_form.is_valid(), valid_form.errors
     assert valid_form.cleaned_data["effective_minimum_cents"] == 5000
+    assert valid_form.cleaned_data["tax_tier_name_snapshot"] == "Reduced Minimum"
     assert not invalid_form.is_valid()
     assert "Enter at least $50.00." in invalid_form.errors["tax_amount_dollars"]
+
+
+def test_tax_selection_form_allows_waived_taxes_with_add_ons() -> None:
+    user = create_user()
+    camp_year = create_camp_year()
+    add_on = create_tax_add_on(camp_year, amount_cents=2500)
+    TaxOverride.objects.create(
+        user=user,
+        camp_year=camp_year,
+        override_type=TaxOverride.OverrideType.WAIVED,
+    )
+    form = TaxSelectionForm(
+        {"tax_tier": "waived", "tax_amount_dollars": "0.00", "add_ons": [str(add_on.id)]},
+        user=user,
+        camp_year=camp_year,
+    )
+
+    assert form.is_valid(), form.errors
+    assert form.cleaned_data["tax_amount_cents"] == 0
+    assert form.cleaned_data["effective_minimum_cents"] == 0
+    assert form.cleaned_data["add_on_amount_cents"] == 2500
+    assert form.cleaned_data["total_amount_cents"] == 2500
+    assert form.cleaned_data["tax_tier_name_snapshot"] == "Waived Taxes"
+
+
+def test_tax_selection_form_rejects_zero_total_waived_checkout() -> None:
+    user = create_user()
+    camp_year = create_camp_year()
+    TaxOverride.objects.create(
+        user=user,
+        camp_year=camp_year,
+        override_type=TaxOverride.OverrideType.WAIVED,
+    )
+    form = TaxSelectionForm(
+        {"tax_tier": "waived", "tax_amount_dollars": "0.00", "add_ons": []},
+        user=user,
+        camp_year=camp_year,
+    )
+
+    assert not form.is_valid()
+    assert "No payment is needed unless you select an add-on." in form.non_field_errors()
 
 
 def test_unavailable_add_on_cannot_be_selected() -> None:

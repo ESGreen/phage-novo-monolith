@@ -68,11 +68,18 @@ Rules:
 |---|---|
 | `/admin/` | Admin home |
 | `/admin/users/` | User/profile management |
+| `/admin/users/<user_id>/` | Edit one user |
 | `/admin/camp/` | Camp years, dashboard pages, tiers, add-ons, overrides |
+| `/admin/camp/<year>/` | Edit one camp year |
+| `/admin/camp/<year>/tax-tier/<tier_id>/` | Edit one tax tier |
+| `/admin/camp/<year>/tax-add-on/<add_on_id>/` | Edit one tax add-on |
 | `/admin/payments/` | Payment review |
 | `/admin/stripe/` | Stripe mode/status/test cleanup |
 | `/admin/pages/` | Content pages |
+| `/admin/pages/<slug>/` | Edit one content page |
 | `/admin/menus/` | Named menus and menu items |
+| `/admin/menus/<menu_name>/` | Edit one menu |
+| `/admin/menu-items/<item_id>/` | Edit one menu item |
 | `/admin/media/` | Image uploads |
 
 ## Login Page
@@ -156,16 +163,19 @@ Content:
 
 - Year heading.
 - Dashboard pre-content page, if configured.
-- Checklist/status area.
+- Ordered registration checklist.
 - Dashboard post-content page, if configured.
-- Links to taxes, profile, and member content.
 
-Checklist status should include:
+Checklist behavior:
 
-- Profile exists.
-- Tax status for year.
-- Tax waived status if override exists.
-- Payment complete if a `paid` payment exists for the year.
+- Profile step is complete only when the user has both a profile photo and non-empty bio.
+- Taxes step is complete when taxes are paid or waived.
+- Paid and waived tax completion display as `Taxes - Paid`.
+- Only the first incomplete step is current and actionable.
+- Later incomplete steps are locked until earlier steps are complete.
+- Completed Profile remains editable from the dashboard.
+- Completed Taxes has no action link.
+- When all steps are complete, the dashboard shows the fully registered message.
 
 ## Taxes Page
 
@@ -176,13 +186,15 @@ URL:
 Behavior:
 
 - If user already has a `paid` payment for the year, show paid status and do not allow another payment.
-- If user has `waived` override, show tax step complete and do not require payment.
-- If no tax tiers are currently available, show taxes unavailable.
-- If available tiers exist, user selects one tier.
+- If no tax tiers are currently available and the user has no override tier, show taxes unavailable.
+- If available tiers exist, user selects one tier from tier cards.
 - Multiple available tiers are allowed.
 - User may enter a tax amount greater than or equal to the chosen tier minimum.
-- If user has a reduced-minimum override, enforce the lower minimum.
+- If user has a reduced-minimum override, show and enforce a synthetic reduced-minimum tier.
+- If user has a waived override, show a synthetic `$0.00` waived tier.
 - User may select currently available add-ons.
+- Waived users may select add-ons at full price and start checkout for add-ons.
+- Zero-dollar waived checkout is rejected because no payment is needed.
 - Submit creates a local `Payment` and starts Stripe Checkout.
 
 ## Content Page
@@ -232,14 +244,20 @@ Content:
 - Links to all admin sections.
 - Current Stripe mode.
 - Current camp year.
-- Basic warnings if config appears incomplete.
 - Link back to member-facing site.
+
+Navigation:
+
+- The `The Phage Admin` title links to `/admin/`.
+- The admin nav links to Users, Camp, Payments, Stripe, Pages, Menus, Media, and Member site.
+- There is no separate Home nav item because the title link already serves that purpose.
 
 ## Users Admin
 
 URL:
 
 - `/admin/users/`
+- `/admin/users/<user_id>/`
 
 List columns:
 
@@ -252,18 +270,26 @@ List columns:
 | Admin |
 | Last login |
 
-Form fields:
+Create form fields:
 
 | Field | Notes |
 |---|---|
-| `email` | Required |
+| `account_address` | Required email |
 | `first_name` | Optional |
 | `last_name` | Optional |
 | `is_active` | Boolean |
 | `is_admin` | Boolean |
-| `password` | Manual set/reset |
-| `bio_markdown` | Profile bio |
-| `photo` | Profile photo replacement |
+| `initial_secret` | Initial password |
+
+Edit sections:
+
+| Section | Fields |
+|---|---|
+| User Flags | `is_active`, `is_admin` |
+| Email | `new_email` |
+| Password | `new_password1`, `new_password2` |
+| Photo | `photo` |
+| Basic Bio | `first_name`, `last_name`, `bio_markdown` |
 
 Behavior:
 
@@ -271,6 +297,11 @@ Behavior:
 - New users get a profile automatically.
 - Admins can deactivate users.
 - Admins can manually set/reset passwords.
+- Admins can replace profile photos and edit profile bio fields.
+- The users overview supports browser-side search and sorting as progressive enhancement.
+- The create-user form can generate a visible password and copy a rendered intro email.
+- Intro email text is rendered from `templates/adminui/emails/new_user_intro.txt`.
+- Admins cannot edit their own account through `/admin/users/<user_id>/`.
 - No email invitation flow in V1.
 - No member impersonation in V1.
 
@@ -279,8 +310,15 @@ Behavior:
 URL:
 
 - `/admin/camp/`
+- `/admin/camp/<year>/`
+- `/admin/camp/<year>/tax-tier/<tier_id>/`
+- `/admin/camp/<year>/tax-add-on/<add_on_id>/`
 
-Keep `/admin/camp/` as one combined admin page for V1. If it becomes too large, split it later.
+`/admin/camp/` is the camp year overview and create page.
+
+`/admin/camp/<year>/` is the camp year edit page for dashboard pages, tax tiers, tax add-ons, and tax overrides.
+
+Tax tiers and tax add-ons have separate edit/delete pages because they are year-specific configured objects.
 
 Sections:
 
@@ -306,10 +344,9 @@ Tax tier form:
 |---|---|
 | `name` | Required |
 | `description` | Optional |
-| `minimum_amount_cents` | Required |
-| `start_date` | Pacific display/input |
-| `expiration_date` | Pacific display/input |
-| `display_order` | Required |
+| `minimum_amount_dollars` | Required dollar input, stored as cents |
+| `start_date` | Required date-only input, stored internally as local midnight |
+| `expiration_date` | Required date-only input, stored internally as local midnight |
 
 Tax add-on form:
 
@@ -317,20 +354,27 @@ Tax add-on form:
 |---|---|
 | `name` | Required |
 | `description` | Optional |
-| `amount_cents` | Required |
-| `start_date` | Pacific display/input |
-| `expiration_date` | Pacific display/input |
-| `display_order` | Required |
+| `amount_dollars` | Required dollar input, stored as cents |
+| `start_date` | Required date-only input, stored internally as local midnight |
+| `expiration_date` | Required date-only input, stored internally as local midnight |
 
 Tax override form:
 
 | Field | Notes |
 |---|---|
-| `user` | Required |
-| `camp_year` | Required |
+| `user` | Required named-user picker scoped by route |
 | `override_type` | `reduced_minimum` or `waived` |
-| `reduced_minimum_amount_cents` | Required only for reduced minimum |
+| `reduced_minimum_amount_dollars` | Required only for reduced minimum, stored as cents |
 | `note` | Admin-only |
+
+Behavior:
+
+- Camp years are listed newest first with summary counts.
+- Tax tiers and add-ons append to the bottom when created.
+- Tax tiers and add-ons are reordered with `▲` and `▼` controls.
+- `display_order` is not a direct admin form field.
+- Tax overrides are created on the camp year edit page and deleted from the same section.
+- The tax override user picker searches by member name and shows email for disambiguation.
 
 ## Payments Admin
 
@@ -393,6 +437,7 @@ Rules:
 URL:
 
 - `/admin/pages/`
+- `/admin/pages/<slug>/`
 
 Fields:
 
@@ -404,6 +449,11 @@ Fields:
 
 Behavior:
 
+- `/admin/pages/` lists pages and has a separate create card.
+- Existing pages are edited through `/admin/pages/<slug>/`.
+- Page edit supports Update and Back, Update and View, and Delete Page.
+- Slug changes redirect to the page overview or the new member-facing URL after save.
+- Protected pages that are referenced by another object cannot be deleted.
 - No published/unpublished state.
 - If a page exists, it is live.
 - No `year_id`.
@@ -414,6 +464,8 @@ Behavior:
 URL:
 
 - `/admin/menus/`
+- `/admin/menus/<menu_name>/`
+- `/admin/menu-items/<item_id>/`
 
 Menu fields:
 
@@ -425,22 +477,24 @@ Menu item fields:
 
 | Field | Notes |
 |---|---|
-| `menu` | Required |
 | `label` | Required user-facing text |
 | `url` | Required |
-| `display_order` | Required |
 
 Behavior:
 
+- `/admin/menus/` lists menus and has a separate create card.
+- `/admin/menus/<menu_name>/` lists items for one menu, creates new items for that menu, reorders items, and deletes non-root menus.
+- `/admin/menu-items/<item_id>/` updates or deletes one item.
 - The `root` menu is required and should not be deleted.
 - The `root` menu is shown as the top member menu.
 - Non-root menus are available at `/menu/<menu_name>/`.
 - Menu item URLs may point to internal paths, external URLs, or menu pages.
+- The menu relationship is route-scoped and is not edited through the menu item form.
+- `display_order` is not typed directly; it is controlled with `▲` and `▼` buttons.
+- The menu item URL field has progressive-enhancement suggestions but remains free-form without JavaScript.
 - There is no link type field.
 - There is no published/unpublished state.
-- Items sort by `display_order`, then `label`.
-- If two items have the same display order, alphabetical order by label is sufficient.
-- No additional equality/tie-break behavior is needed.
+- Items sort by admin-managed order.
 
 ## Media Admin
 

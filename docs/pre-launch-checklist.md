@@ -38,6 +38,8 @@ This verifies the site end-to-end from public, member, admin, Stripe, and backup
 
 - Log in as admin.
 - Confirm `/admin/` loads.
+- Confirm the `The Phage Admin` title links back to `/admin/`.
+- Confirm the admin nav does not duplicate the title link with a separate Home item.
 - Confirm `/admin/users/` loads.
 - Confirm `/admin/camp/` loads.
 - Confirm `/admin/payments/` loads.
@@ -49,11 +51,29 @@ This verifies the site end-to-end from public, member, admin, Stripe, and backup
 ## Camp Setup
 
 - Confirm current camp year exists.
+- Open the current year edit page from `/admin/camp/`.
+- Confirm dashboard pages are set or intentionally blank.
 - Confirm tax tiers are configured.
 - Confirm add-ons are configured.
+- Confirm tax tier and add-on order is correct.
+- Confirm tax tier and add-on edit pages load.
 - Confirm dashboard pre-checklist content appears.
 - Confirm dashboard post-checklist content appears.
 - Confirm menus look correct.
+
+## Pages And Menus
+
+- Confirm `/admin/pages/` lists content pages and shows the Create Page card.
+- Open an existing page edit screen at `/admin/pages/<slug>/`.
+- Confirm Update and Back works for a harmless wording change or no-op save.
+- Confirm Update and View opens the member-facing page.
+- Confirm `/admin/menus/` lists menus and shows the Create Menu card.
+- Open `/admin/menus/root/`.
+- Confirm root menu items are correct.
+- Confirm menu item order controls are present where needed.
+- Open an existing menu item edit screen.
+- Confirm the menu item form only asks for label and URL.
+- Confirm URL suggestions appear when JavaScript is enabled, while free-form URLs are still accepted.
 
 ## Stripe Test Mode
 

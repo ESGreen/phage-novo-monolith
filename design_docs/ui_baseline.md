@@ -83,7 +83,7 @@ Includes:
 - Admin header.
 - Admin section links.
 - Link back to member site.
-- Current admin section indicator.
+- Site title link back to the admin home page.
 
 ## Layout Width
 
@@ -170,7 +170,6 @@ Camp Info
 
 Admin pages should show links to:
 
-- Admin home.
 - Users.
 - Camp.
 - Payments.
@@ -182,9 +181,36 @@ Admin pages should show links to:
 
 Rules:
 
+- The `The Phage Admin` title links to `/admin/`.
+- Do not add a duplicate Home nav item unless the title link is removed.
 - Admin navigation should be boring and obvious.
 - Do not hide important admin links behind hover behavior.
 - Highlight or label the current section if easy.
+
+## Admin Screen Pattern
+
+Admin pages should prefer predictable, route-specific workflows:
+
+- Overview pages use tables with clear edit links.
+- Create forms appear in a separate card from the overview table.
+- Objects with substantial content or destructive actions have their own edit page.
+- Delete actions appear in a `danger-card` or other clearly marked danger area.
+- Safe table actions use secondary button styling.
+- Ordering controls use `▲` and `▼` buttons with accessible labels.
+- Route-scoped forms avoid exposing implementation fields such as `display_order`.
+- JavaScript enhancements must leave normal server-rendered forms usable.
+
+Current object-specific edit routes:
+
+| Object | Route |
+|---|---|
+| User | `/admin/users/<user_id>/` |
+| Camp year | `/admin/camp/<year>/` |
+| Tax tier | `/admin/camp/<year>/tax-tier/<tier_id>/` |
+| Tax add-on | `/admin/camp/<year>/tax-add-on/<add_on_id>/` |
+| Page | `/admin/pages/<slug>/` |
+| Menu | `/admin/menus/<menu_name>/` |
+| Menu item | `/admin/menu-items/<item_id>/` |
 
 ## Messages
 
@@ -230,7 +256,7 @@ Recommended button labels:
 
 Destructive actions:
 
-- Require explicit confirmation page or confirmation form.
+- Use an explicit danger area, confirmation form, or confirmation page.
 - Do not rely only on JavaScript confirm dialogs.
 - Use clear wording for test payment cleanup and media deletion.
 
@@ -298,39 +324,52 @@ Sections:
 
 - Year heading.
 - Pre-content page.
-- Status/checklist.
-- Payment status.
-- Action links.
+- Ordered registration checklist.
 - Post-content page.
 
-Status examples:
+Checklist rules:
 
-- Profile complete.
-- Taxes waived.
-- Taxes paid.
-- Taxes not paid.
-- Payment pending.
+- Checklist items are shown in order.
+- The first incomplete item is highlighted as the current step.
+- Later incomplete items are shown as locked and do not show an action button.
+- Completed items use complete styling and status text.
+- Profile is complete only when the member has both a profile photo and non-empty bio.
+- Taxes are complete when paid or waived; both complete states display `Taxes - Paid`.
+- Completed Profile remains easy to edit.
+- Completed Taxes does not link back to the taxes page.
+- When all items are complete, show `You are fully registered. Now all that's left is to get packing.`
+
+Checklist visual states:
+
+- Complete: `[x]`.
+- Current: `!`.
+- Locked: `[ ]`.
 
 ## Taxes UI
 
 Taxes page should show:
 
 - Current year.
-- Available tax tiers.
+- Available tax tiers as selectable cards.
 - Explanation that tiers are minimums.
+- Reduced-minimum override as its own selectable tier when present.
+- Waived override as a `$0.00` selectable tier when present.
 - Custom amount input.
-- Available add-ons.
+- Available add-ons as checkbox cards.
 - Total amount.
 - Start Checkout button.
 - Existing payment status if already paid.
-- Waived status if waived.
 
 Rules:
 
 - If no tax tiers are available, explain that taxes are not currently available.
 - If already paid, do not show checkout form.
-- If waived, do not show checkout form.
+- If waived, show the `$0.00` waived tier and allow full-price add-ons.
+- Do not send a zero-dollar checkout; waived users only start Stripe Checkout when the total is greater than zero.
 - If a pending unexpired checkout exists, explain that another checkout cannot be started yet.
+- Selecting a tier updates the displayed minimum, the amount input value, and the amount input minimum.
+- Users may increase the tax amount above the selected minimum.
+- JavaScript updates the summary live, but server-side validation remains authoritative.
 
 ## Stripe Admin UI
 

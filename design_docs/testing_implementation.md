@@ -215,8 +215,9 @@ Cover:
 - `/dashboard/` redirects to current year dashboard.
 - `/<year>/dashboard/` loads.
 - Dashboard renders pre/post content pages.
-- Dashboard shows paid status.
-- Dashboard shows waived status.
+- Dashboard requires profile photo and bio before taxes are current.
+- Dashboard shows paid and waived taxes as `Taxes - Paid`.
+- Dashboard shows the fully registered message when profile and taxes are complete.
 - Tax tiers are available inside start/expiration dates.
 - Tax tiers unavailable before start.
 - Tax tiers unavailable after expiration.
@@ -228,7 +229,8 @@ Cover:
 - Add-ons unavailable outside dates.
 - Reduced-minimum override changes minimum.
 - Tax-waived override marks tax step complete.
-- Tax-waived users cannot start checkout.
+- Tax-waived users can start add-on-only checkout.
+- Tax-waived users cannot start zero-dollar checkout.
 
 ## Payment And Stripe Checkout Tests
 
