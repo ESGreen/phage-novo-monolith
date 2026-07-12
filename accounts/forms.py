@@ -64,11 +64,10 @@ class ProfilePhotoForm(forms.Form):
 
 
 class ProfileBioForm(forms.Form):
-    first_name = forms.CharField(max_length=150, required=False)
-    last_name = forms.CharField(max_length=150, required=False)
+    first_name = forms.CharField(max_length=150)
+    last_name = forms.CharField(max_length=150)
     bio_markdown = forms.CharField(
         label="Bio",
-        required=False,
         widget=forms.Textarea(attrs={"rows": 8}),
     )
 

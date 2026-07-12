@@ -13,6 +13,7 @@
           <a class="nav-link" href="{{ item.url }}">{{ item.label }}</a>
         {% empty %}
           <a class="nav-link" href="/dashboard/">Dashboard</a>
+          <a class="nav-link" href="{% url 'camp:phagebook-current' %}">Phage Book</a>
           <a class="nav-link" href="{% url 'accounts:profile' %}">Profile</a>
         {% endfor %}
         <form class="logout-form" method="post" action="{% url 'accounts:logout' %}">

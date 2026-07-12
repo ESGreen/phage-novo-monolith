@@ -1012,12 +1012,13 @@ def _menus_with_item_summaries() -> list[Menu]:
 
 
 def _menu_url_suggestions() -> list[str]:
-    suggestions = ["/dashboard/", "/profile/"]
+    suggestions = ["/dashboard/", "/phagebook/", "/profile/"]
     current_year = get_current_camp_year()
     if current_year is not None:
         suggestions.extend(
             [
                 reverse("camp:dashboard", kwargs={"year": current_year.year}),
+                reverse("camp:phagebook", kwargs={"year": current_year.year}),
                 reverse("camp:taxes", kwargs={"year": current_year.year}),
             ],
         )

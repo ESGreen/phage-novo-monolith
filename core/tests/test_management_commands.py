@@ -16,7 +16,12 @@ pytestmark = pytest.mark.django_db
 
 def test_initial_data_exists() -> None:
     assert SiteSettings.objects.get(pk=SiteSettings.SINGLETON_PK).stripe_mode == "test"
-    assert Menu.objects.filter(menu_name=Menu.ROOT_MENU_NAME).exists()
+    root_menu = Menu.objects.get(menu_name=Menu.ROOT_MENU_NAME)
+    assert list(root_menu.items.values_list("label", "url", "display_order")) == [
+        ("Dashboard", "/dashboard/", 1),
+        ("Phage Book", "/phagebook/", 2),
+        ("Profile", "/profile/", 3),
+    ]
 
 
 def test_create_admin_creates_active_admin_user_with_profile() -> None:

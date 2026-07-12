@@ -70,7 +70,7 @@ User edit URL:
 /admin/users/<user_id>/
 ```
 
-The user edit page has separate cards for flags, email, password, photo, and basic bio. Admins cannot edit their own user through this page.
+The user edit page has separate cards for flags, email, password, photo, and basic bio. Admins cannot edit their own user through this page. First name, last name, profile photo, and bio are all part of registration profile completion.
 
 ## Camp Years And Taxes
 
@@ -183,7 +183,7 @@ Member survey URL:
 /survey/<slug>/
 ```
 
-Members can submit or revise their own response while the survey is active. Successful submission redirects to `/survey/<slug>/complete/`.
+Members can submit or revise their own response while the survey is active. Successful submission redirects to the survey's configured internal redirect URL when set, otherwise to `/survey/<slug>/complete/`.
 
 ## Menus
 
@@ -195,7 +195,7 @@ Overview URL:
 
 The menus overview lists named menus and a short summary of each menu's items. Create menu is a separate card.
 
-The required top-level member menu is named `root`. It cannot be deleted.
+The required top-level member menu is named `root`. It cannot be deleted. New systems seed it with Dashboard, Phage Book, and Profile, in that order.
 
 Menu edit URL:
 
@@ -213,9 +213,9 @@ Menu item edit URL:
 
 Menu items expose only label and URL in the form. The menu relationship is controlled by the route where the item is created. Ordering is controlled by the `▲` and `▼` buttons.
 
-Menu item URLs are free-form. They may be internal paths such as `/dashboard/`, `/pages/<slug>/`, `/menu/<menu_name>/`, `/<year>/taxes/`, or external URLs.
+Menu item URLs are free-form. They may be internal paths such as `/dashboard/`, `/phagebook/`, `/pages/<slug>/`, `/menu/<menu_name>/`, `/<year>/taxes/`, or external URLs.
 
-The URL field has a progressive-enhancement suggestion picker. Suggestions include common app routes, current-year dashboard and taxes routes, content pages, and menu pages. The field still works as a normal text input without JavaScript.
+The URL field has a progressive-enhancement suggestion picker. Suggestions include common app routes, current-year dashboard, Phagebook, and taxes routes, content pages, and menu pages. The field still works as a normal text input without JavaScript.
 
 ## Payments
 

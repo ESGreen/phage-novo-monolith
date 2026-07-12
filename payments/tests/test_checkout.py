@@ -22,6 +22,9 @@ def create_camp_year(year: int = 2026) -> CampYear:
 
 
 def complete_profile(user) -> None:
+    user.first_name = "Ada"
+    user.last_name = "Lovelace"
+    user.save(update_fields=["first_name", "last_name", "updated_at"])
     photo = MediaItem.objects.create(
         title="Profile photo",
         original_filename="profile.png",

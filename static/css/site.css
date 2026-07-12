@@ -731,6 +731,39 @@ legend {
   padding: 0.85rem 1rem;
 }
 
+.phagebook-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.phagebook-entry {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.phagebook-entry__name {
+  margin-bottom: 0;
+}
+
+.phagebook-entry__photo {
+  border-radius: 0.75rem;
+  max-height: 18rem;
+  max-width: 100%;
+}
+
+.phagebook-entry__email {
+  font-weight: 800;
+  margin: 0;
+}
+
+.phagebook-entry__bio > :first-child {
+  margin-top: 0;
+}
+
+.phagebook-entry__bio > :last-child {
+  margin-bottom: 0;
+}
+
 @media (max-width: 40rem) {
   .dashboard-item {
     align-items: stretch;

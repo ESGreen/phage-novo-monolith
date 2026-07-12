@@ -175,6 +175,7 @@ Admin pages should show links to:
 - Payments.
 - Stripe.
 - Pages.
+- Surveys.
 - Menus.
 - Media.
 - Member site.
@@ -209,6 +210,8 @@ Current object-specific edit routes:
 | Tax tier | `/admin/camp/<year>/tax-tier/<tier_id>/` |
 | Tax add-on | `/admin/camp/<year>/tax-add-on/<add_on_id>/` |
 | Page | `/admin/pages/<slug>/` |
+| Survey | `/admin/surveys/<slug>/` |
+| Survey question | `/admin/surveys/<slug>/<question_id>/` |
 | Menu | `/admin/menus/<menu_name>/` |
 | Menu item | `/admin/menu-items/<item_id>/` |
 
@@ -333,7 +336,9 @@ Checklist rules:
 - The first incomplete item is highlighted as the current step.
 - Later incomplete items are shown as locked and do not show an action button.
 - Completed items use complete styling and status text.
-- Profile is complete only when the member has both a profile photo and non-empty bio.
+- Profile is complete only when the member has first name, last name, profile photo, and non-empty bio.
+- Camp Survey appears between Profile and Taxes when configured for the camp year.
+- Camp Survey is complete when the member has a response for that survey.
 - Taxes are complete when paid or waived; both complete states display `Taxes - Paid`.
 - Completed Profile remains easy to edit.
 - Completed Taxes does not link back to the taxes page.

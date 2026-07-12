@@ -189,6 +189,8 @@ Steps:
 - Go to `/admin/stripe/`.
 - Switch site to test mode.
 - Log in as a test member.
+- Confirm the test member has first name, last name, profile photo, and bio.
+- If the current camp year has a Camp survey, complete it before going to taxes.
 - Go to `/dashboard/`.
 - Go to the current year dashboard.
 - Go to taxes.
@@ -264,6 +266,8 @@ Steps:
 
 - Confirm `/admin/stripe/` is in live mode.
 - Admin logs in as a normal member.
+- Admin confirms their member profile has first name, last name, profile photo, and bio.
+- If the current camp year has a Camp survey, admin completes it before going to taxes.
 - Admin goes to `/dashboard/`.
 - Admin goes to the current year dashboard.
 - Admin goes to taxes.

@@ -178,6 +178,7 @@ Admin sections:
 - `/admin/payments/`.
 - `/admin/stripe/`.
 - `/admin/pages/`.
+- `/admin/surveys/`.
 - `/admin/menus/`.
 - `/admin/media/`.
 
@@ -329,11 +330,15 @@ Project URL includes:
 /login/
 /logout/
 /dashboard/
+/phagebook/
 /<year>/
 /<year>/dashboard/
+/<year>/phagebook/
 /<year>/taxes/
 /<year>/taxes/return/
 /profile/
+/survey/<slug>/
+/survey/<slug>/complete/
 /pages/<slug>/
 /menu/<menu_name>/
 /stripe/webhook/
@@ -583,7 +588,8 @@ Use simple, explicit behavior:
 - Rich CMS.
 - Nested menu trees.
 - Hover-only dropdown menus.
-- Survey/jobs/roster models.
+- Generic job/signup models.
+- Configurable roster/report models beyond Phagebook.
 - Multi-currency payments.
 - Non-card Stripe payment methods.
 - Image resizing.

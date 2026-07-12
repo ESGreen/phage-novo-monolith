@@ -31,6 +31,9 @@ def create_profile_photo(user) -> MediaItem:
 
 
 def complete_profile(user) -> None:
+    user.first_name = "Ada"
+    user.last_name = "Lovelace"
+    user.save(update_fields=["first_name", "last_name", "updated_at"])
     user.profile.photo = create_profile_photo(user)
     user.profile.bio_markdown = "Ready for camp."
     user.profile.save(update_fields=["photo", "bio_markdown", "updated_at"])
@@ -128,7 +131,7 @@ def test_year_dashboard_loads_for_existing_year(client) -> None:
     assert b"2026 Dashboard" in response.content
     assert b"Registration Checklist" in response.content
     assert b"Profile" in response.content
-    assert b"Add a picture and bio to your profile" in response.content
+    assert b"Add your name, picture, and bio to your profile" in response.content
     assert b"Complete Profile" in response.content
     assert b"Please pay your camp taxes" in response.content
     assert b"Locked" in response.content
@@ -185,17 +188,21 @@ def test_dashboard_renders_pre_and_post_content_safely(client) -> None:
     assert b"<script" not in response.content
 
 
-def test_dashboard_requires_profile_photo_and_bio_before_taxes_are_current(client) -> None:
+def test_dashboard_requires_profile_name_photo_and_bio_before_taxes_are_current(client) -> None:
     user = create_user()
+    user.first_name = "Ada"
+    user.last_name = ""
+    user.save(update_fields=["first_name", "last_name", "updated_at"])
     user.profile.photo = create_profile_photo(user)
-    user.profile.save(update_fields=["photo", "updated_at"])
+    user.profile.bio_markdown = "Ready for camp."
+    user.profile.save(update_fields=["photo", "bio_markdown", "updated_at"])
     client.force_login(user)
     CampYear.objects.create(year=2026)
 
     response = client.get("/2026/dashboard/")
 
     assert response.status_code == 200
-    assert b"Add a picture and bio to your profile" in response.content
+    assert b"Add your name, picture, and bio to your profile" in response.content
     assert b"Complete Profile" in response.content
     assert b"Pay Taxes" not in response.content
 
@@ -209,7 +216,7 @@ def test_dashboard_makes_taxes_current_after_profile_is_complete(client) -> None
     response = client.get("/2026/dashboard/")
 
     assert response.status_code == 200
-    assert b"Check your picture / bio." in response.content
+    assert b"Check your name / picture / bio." in response.content
     assert b"Edit Profile" in response.content
     assert b"Please pay your camp taxes" in response.content
     assert b"Pay Taxes" in response.content

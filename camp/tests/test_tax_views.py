@@ -22,6 +22,9 @@ def create_camp_year(year: int = 2026) -> CampYear:
 
 
 def complete_profile(user) -> None:
+    user.first_name = "Ada"
+    user.last_name = "Lovelace"
+    user.save(update_fields=["first_name", "last_name", "updated_at"])
     photo = MediaItem.objects.create(
         title="Profile photo",
         original_filename="profile.png",
@@ -198,6 +201,21 @@ def test_tax_page_rejects_below_minimum_amount(client) -> None:
 
 def test_taxes_page_redirects_to_dashboard_when_profile_is_incomplete(client) -> None:
     user = create_user()
+    client.force_login(user)
+    camp_year = create_camp_year()
+    create_tax_tier(camp_year)
+
+    response = client.get("/2026/taxes/")
+
+    assert response.status_code == 302
+    assert response["Location"] == "/2026/dashboard/"
+
+
+def test_taxes_page_redirects_to_dashboard_when_profile_name_is_incomplete(client) -> None:
+    user = create_user()
+    complete_profile(user)
+    user.last_name = ""
+    user.save(update_fields=["last_name", "updated_at"])
     client.force_login(user)
     camp_year = create_camp_year()
     create_tax_tier(camp_year)

@@ -4,7 +4,7 @@
 
 The Phage website will be a Django-based website hosted at `thephage.org`.
 
-The purpose of the site is to give camp members one reliable place to handle yearly camp business, especially paying camp taxes, accessing camp information, and eventually completing yearly survey and roster workflows.
+The purpose of the site is to give camp members one reliable place to handle yearly camp business, especially paying camp taxes, accessing camp information, completing surveys, and seeing the year Phagebook.
 
 The site should be simple to maintain. Most member-site content changes should be possible through the custom product admin without editing Django templates. The site is expected to change lightly, usually once per year.
 
@@ -52,6 +52,8 @@ Core features:
 - Payment status shown to users.
 - Payment status visible to admins.
 - Basic yearly structure through a `CampYear` concept.
+- Configurable member surveys.
+- Year-scoped Phagebook for fully registered members.
 
 ## Version 1 Member Dashboard
 
@@ -116,8 +118,8 @@ Each year should have its own:
 
 - Tax settings.
 - Payment records.
-- Future survey.
-- Future roster/report configuration.
+- Optional Camp survey requirement.
+- Phagebook membership based on completed registration.
 - Year-specific information as needed.
 
 The yearly rollover should be explicit and admin-driven.
@@ -125,6 +127,7 @@ The yearly rollover should be explicit and admin-driven.
 Expected yearly process:
 
 - Create new camp year.
+- Select an optional Camp survey.
 - Configure tax tiers and options.
 - Update member content pages and public static pages.
 - Create or update user accounts.
@@ -135,44 +138,45 @@ Expected yearly process:
 
 Future versions should expand the site without requiring a rewrite.
 
-Likely future modules:
+Current and likely future modules:
 
-- Yearly member survey.
-- Photo/name directory.
+- Configurable member surveys.
+- Phagebook photo/name directory.
 - Tabular roster.
 - Survey results/statistics pages.
 - CSV exports.
 - Job/shift signup.
 - More detailed admin reporting.
 
-## Future Survey System
+## Survey System
 
-The survey should eventually be configurable through the admin rather than hardcoded in templates.
+The survey system is configurable through the admin rather than hardcoded in templates.
 
 The survey should support questions that can change year to year while preserving old responses.
 
-Likely question types:
+Current question types:
 
 - Short text.
 - Long text.
-- Yes/no.
 - Single choice.
 - Multiple choice.
 - Number.
 - Date.
-- Image/photo upload.
+- Email.
+- Phone.
 
-Survey answers should support future reports such as the member directory, roster table, and aggregate stats.
+Survey answers support admin review/export today and should support future reports such as roster tables and aggregate stats.
 
-## Future Roster And Reports
+## Phagebook And Future Reports
 
-Survey results should eventually feed three main outputs:
+The current member directory is the Phagebook at `/<year>/phagebook/`, with `/phagebook/` redirecting to the current camp year. It shows fully registered members with name, photo, email, and bio.
 
-- A photo/name directory of camp members.
+Future reporting may add:
+
 - A tabular roster with selected fields.
 - A summary page with tabulated survey results.
 
-Admins should be able to choose which survey questions appear in the roster or stats pages.
+Admins may eventually choose which survey questions appear in roster or stats pages.
 
 ## Future Job Signup
 
@@ -230,4 +234,4 @@ The new site should not copy the old WordPress/CGI architecture.
 
 The site should be easy to understand one year later.
 
-The best version is not the most flexible possible system. The best version is a small, reliable Django app that handles taxes and camp information cleanly, while leaving room for survey, roster, and job features to be added later.
+The best version is not the most flexible possible system. The best version is a small, reliable Django app that handles taxes, surveys, Phagebook, and camp information cleanly, while leaving room for reports and job features to be added later.

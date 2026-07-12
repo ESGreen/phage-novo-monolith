@@ -48,6 +48,8 @@ Markdown fields:
 
 - `MemberProfile.bio_markdown`
 - `ContentPage.body_markdown`
+- `Survey.description_markdown`
+- `SurveyQuestion.description_markdown`
 
 Markdown rendering should happen through one shared helper.
 
@@ -257,9 +259,9 @@ Rationale:
 - Small enough to avoid accidental huge uploads.
 - Admins can resize offline if needed.
 
-## Stored Filenames
+## Stored File Paths
 
-Stored filenames should include:
+Stored `MediaItem.file_path` values should include:
 
 - Media database ID.
 - Safe slugified original filename.
@@ -284,7 +286,7 @@ Rules:
 Uploaded files are served from:
 
 ```text
-/media/<stored_filename>
+/media/<file_path>
 ```
 
 Rules:

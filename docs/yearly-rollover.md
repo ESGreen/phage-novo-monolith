@@ -22,6 +22,7 @@ Use this runbook:
 - Member pages are managed through the website admin.
 - The current year is inferred from the maximum configured camp year.
 - `/dashboard/` redirects to the current year dashboard.
+- `/phagebook/` redirects to the current year Phagebook.
 - `/<year>/dashboard/` is the canonical year dashboard.
 - Stripe test/live mode is managed through `/admin/stripe/`.
 
@@ -34,6 +35,7 @@ The current admin UI workflow is described in `docs/admin-ui.md`.
 - `/admin/payments/`
 - `/admin/stripe/`
 - `/admin/pages/`
+- `/admin/surveys/`
 - `/admin/menus/`
 - `/admin/media/`
 
@@ -42,6 +44,7 @@ The current admin UI workflow is described in `docs/admin-ui.md`.
 - Create a full EC2 image before major changes.
 - Create or verify the new camp year.
 - Update year dashboard content.
+- Configure or verify the Camp survey.
 - Update member content pages.
 - Update public static pages if needed.
 - Update menus.
@@ -83,21 +86,22 @@ Example:
 2026
 ```
 
-The current year is inferred from the maximum configured camp year, so creating a new year changes where `/dashboard/` points.
+The current year is inferred from the maximum configured camp year, so creating a new year changes where `/dashboard/` and `/phagebook/` point.
 
 Verify:
 
 - The new year exists.
 - Old years still exist.
 - `/dashboard/` points to the new year dashboard after the new year is ready.
+- `/phagebook/` points to the new year Phagebook after the new year is ready.
 
 Do not create the new camp year until you are ready for it to become the current year.
 
-## 3. Configure Year Dashboard Content
+## 3. Configure Dashboard Setup
 
 Go to `/admin/camp/`, then open the new year's edit page.
 
-Configure the year dashboard page references.
+Configure the year dashboard page references and optional Camp survey.
 
 The dashboard can render two admin-selected content pages:
 
@@ -108,11 +112,14 @@ Use the pre-checklist content for the most important yearly information.
 
 Use the post-checklist content for supporting details, reminders, links, or longer explanatory text.
 
+If the camp year requires a survey before taxes, select that survey as the Camp survey. Configure the survey's Redirect after submission URL to send members back to the dashboard, or another intended internal path.
+
 Verify:
 
 - `/<year>/dashboard/` loads.
 - The pre-checklist content appears.
 - The post-checklist content appears.
+- The Camp survey requirement appears when configured.
 - The dashboard makes the next required action obvious.
 
 ## 4. Update Member Content Pages
@@ -206,6 +213,7 @@ Common menu targets:
 
 ```text
 /dashboard/
+/phagebook/
 /profile/
 /<year>/taxes/
 /pages/<slug>/
@@ -353,6 +361,8 @@ Verify:
 
 Log in as a test member.
 
+Confirm the test member has first name, last name, profile photo, and bio. If the current camp year has a Camp survey, complete it before going to taxes.
+
 Run the normal member payment flow:
 
 - Go to `/dashboard/`.
@@ -405,6 +415,8 @@ Steps:
 
 - Confirm `/admin/stripe/` is in live mode.
 - Admin logs in as a normal member.
+- Admin confirms their member profile has first name, last name, profile photo, and bio.
+- If the current camp year has a Camp survey, admin completes it before going to taxes.
 - Admin goes to `/dashboard/`.
 - Admin goes to the current year dashboard.
 - Admin goes to the taxes page.
@@ -438,7 +450,9 @@ After the live payment test succeeds, taxes can be announced.
 Before announcement, verify:
 
 - `/dashboard/` redirects to the correct year.
+- `/phagebook/` redirects to the correct year.
 - Current year dashboard is correct.
+- Current year Phagebook loads.
 - Tax page is available.
 - Tax tiers are correct.
 - Add-ons are correct.
@@ -495,6 +509,6 @@ If a member cannot pay, check:
 - User is active.
 - Correct camp year exists.
 - At least one valid tax tier exists.
-- Required steps are complete.
+- Required steps are complete: first name, last name, profile photo, bio, and Camp survey response when configured.
 - Tax override is correct.
 - Member has not already paid.

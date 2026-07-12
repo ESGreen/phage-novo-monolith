@@ -1,0 +1,29 @@
+{% extends "member_base.html" %}
+
+{% block title %}{{ camp_year.year }} Phagebook - The Phage{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <h1>{{ camp_year.year }} Phagebook</h1>
+    <p>Everyone fully registered for this camp year.</p>
+  </div>
+
+  {% if entries %}
+    <div class="phagebook-list">
+      {% for entry in entries %}
+        <article class="content-card phagebook-entry">
+          <h2 class="phagebook-entry__name">{{ entry.user.get_full_name|default:entry.user.email }}</h2>
+          <img class="phagebook-entry__photo" src="{{ entry.user.profile.photo.url }}" alt="Profile photo for {{ entry.user.get_full_name|default:entry.user.email }}">
+          <p class="phagebook-entry__email"><a href="mailto:{{ entry.user.email }}">{{ entry.user.email }}</a></p>
+          <div class="phagebook-entry__bio markdown-body">
+            {{ entry.bio_html }}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <section class="content-card">
+      <p>No one is fully registered for {{ camp_year.year }} yet.</p>
+    </section>
+  {% endif %}
+{% endblock %}

@@ -55,10 +55,15 @@ Rules:
 | URL | Behavior |
 |---|---|
 | `/dashboard/` | Redirects to current year dashboard |
+| `/phagebook/` | Redirects to current year Phagebook |
 | `/<year>/` | Redirects or aliases to `/<year>/dashboard/` |
 | `/<year>/dashboard/` | Canonical year dashboard |
+| `/<year>/phagebook/` | Member Phagebook for a camp year |
 | `/<year>/taxes/` | Tax selection/payment page |
+| `/<year>/taxes/return/` | Stripe return page |
 | `/profile/` | Profile page |
+| `/survey/<slug>/` | Member survey page |
+| `/survey/<slug>/complete/` | Default survey completion page |
 | `/pages/<slug>/` | Member-only content page |
 | `/menu/<menu_name>/` | Member-only menu page |
 
@@ -69,7 +74,7 @@ Rules:
 | `/admin/` | Admin home |
 | `/admin/users/` | User/profile management |
 | `/admin/users/<user_id>/` | Edit one user |
-| `/admin/camp/` | Camp years, dashboard pages, tiers, add-ons, overrides |
+| `/admin/camp/` | Camp years, Dashboard Setup, tiers, add-ons, overrides |
 | `/admin/camp/<year>/` | Edit one camp year |
 | `/admin/camp/<year>/tax-tier/<tier_id>/` | Edit one tax tier |
 | `/admin/camp/<year>/tax-add-on/<add_on_id>/` | Edit one tax add-on |
@@ -77,6 +82,11 @@ Rules:
 | `/admin/stripe/` | Stripe mode/status/test cleanup |
 | `/admin/pages/` | Content pages |
 | `/admin/pages/<slug>/` | Edit one content page |
+| `/admin/surveys/` | Surveys overview and create form |
+| `/admin/surveys/<slug>/` | Edit one survey |
+| `/admin/surveys/<slug>/<question_id>/` | Edit one survey question |
+| `/admin/surveys/<slug>/responses/` | Review survey responses |
+| `/admin/surveys/<slug>/responses.csv` | Export survey responses as CSV |
 | `/admin/menus/` | Named menus and menu items |
 | `/admin/menus/<menu_name>/` | Edit one menu |
 | `/admin/menu-items/<item_id>/` | Edit one menu item |
@@ -142,7 +152,7 @@ Password change fields:
 
 Behavior:
 
-- Members can update name and bio.
+- Members can update name and bio. First name, last name, and bio are required.
 - Members can replace profile photo.
 - Members cannot self-delete profile photo in V1.
 - Email change requires on-page confirmation.
@@ -168,7 +178,9 @@ Content:
 
 Checklist behavior:
 
-- Profile step is complete only when the user has both a profile photo and non-empty bio.
+- Profile step is complete only when the user has first name, last name, profile photo, and non-empty bio.
+- Camp Survey step appears between Profile and Taxes when the camp year has a configured Camp survey.
+- Camp Survey step is complete when the user has a response for that survey.
 - Taxes step is complete when taxes are paid or waived.
 - Paid and waived tax completion display as `Taxes - Paid`.
 - Only the first incomplete step is current and actionable.
@@ -176,6 +188,39 @@ Checklist behavior:
 - Completed Profile remains editable from the dashboard.
 - Completed Taxes has no action link.
 - When all steps are complete, the dashboard shows the fully registered message.
+
+## Phagebook Page
+
+URLs:
+
+| URL | Notes |
+|---|---|
+| `/<year>/phagebook/` | Canonical year Phagebook |
+| `/phagebook/` | Redirects to current year |
+
+Behavior:
+
+- Member-only.
+- Any active logged-in member can view it.
+- Only fully registered members appear.
+- Entries show name, profile photo, email, and sanitized rendered bio.
+- Entries are ordered by last name, first name, then email.
+
+## Member Survey Page
+
+URLs:
+
+| URL | Notes |
+|---|---|
+| `/survey/<slug>/` | Display and submit active survey |
+| `/survey/<slug>/complete/` | Default completion page |
+
+Behavior:
+
+- Member-only.
+- Active surveys allow the member to create or update their own response.
+- Inactive surveys are not available to members.
+- Successful submission redirects to the configured internal Redirect after submission URL, or to `/survey/<slug>/complete/` when blank.
 
 ## Taxes Page
 
@@ -186,6 +231,7 @@ URL:
 Behavior:
 
 - If user already has a `paid` payment for the year, show paid status and do not allow another payment.
+- Direct tax page access redirects back to the dashboard until profile and configured Camp survey prerequisites are complete.
 - If no tax tiers are currently available and the user has no override tier, show taxes unavailable.
 - If available tiers exist, user selects one tier from tier cards.
 - Multiple available tiers are allowed.
@@ -249,7 +295,7 @@ Content:
 Navigation:
 
 - The `The Phage Admin` title links to `/admin/`.
-- The admin nav links to Users, Camp, Payments, Stripe, Pages, Menus, Media, and Member site.
+- The admin nav links to Users, Camp, Payments, Stripe, Pages, Surveys, Menus, Media, and Member site.
 - There is no separate Home nav item because the title link already serves that purpose.
 
 ## Users Admin
@@ -316,7 +362,7 @@ URL:
 
 `/admin/camp/` is the camp year overview and create page.
 
-`/admin/camp/<year>/` is the camp year edit page for dashboard pages, tax tiers, tax add-ons, and tax overrides.
+`/admin/camp/<year>/` is the camp year edit page for Dashboard Setup, tax tiers, tax add-ons, and tax overrides.
 
 Tax tiers and tax add-ons have separate edit/delete pages because they are year-specific configured objects.
 
@@ -325,7 +371,7 @@ Sections:
 | Section |
 |---|
 | Camp years |
-| Dashboard content page references |
+| Dashboard Setup |
 | Tax tiers |
 | Tax add-ons |
 | Tax overrides |
@@ -337,6 +383,7 @@ Camp year form:
 | `year` | Required unique year |
 | `dashboard_pre_page` | Optional content page |
 | `dashboard_post_page` | Optional content page |
+| `camp_survey` | Optional survey required before taxes |
 
 Tax tier form:
 
@@ -373,6 +420,7 @@ Behavior:
 - Tax tiers and add-ons append to the bottom when created.
 - Tax tiers and add-ons are reordered with `▲` and `▼` controls.
 - `display_order` is not a direct admin form field.
+- Dashboard Setup saves pre-page, post-page, and optional Camp survey together.
 - Tax overrides are created on the camp year edit page and deleted from the same section.
 - The tax override user picker searches by member name and shows email for disambiguation.
 
@@ -459,6 +507,27 @@ Behavior:
 - No `year_id`.
 - No rendered preview in V1.
 
+## Surveys Admin
+
+URL:
+
+- `/admin/surveys/`
+- `/admin/surveys/<slug>/`
+- `/admin/surveys/<slug>/<question_id>/`
+- `/admin/surveys/<slug>/responses/`
+- `/admin/surveys/<slug>/responses.csv`
+
+Behavior:
+
+- `/admin/surveys/` lists active surveys by default and can show inactive surveys with progressive enhancement.
+- Create Survey is a separate card on the overview page.
+- `/admin/surveys/<slug>/` edits survey details, questions, choices, ordering, and protected survey deletion.
+- Survey details include active status and optional internal Redirect after submission URL.
+- `/admin/surveys/<slug>/<question_id>/` edits one question and its conditional display rules.
+- `/admin/surveys/<slug>/responses/` shows member name, member email, and one column per current question.
+- `/admin/surveys/<slug>/responses.csv` exports the same response matrix.
+- Member survey routes stay singular at `/survey/<slug>/` and `/survey/<slug>/complete/`.
+
 ## Menus Admin
 
 URL:
@@ -487,6 +556,7 @@ Behavior:
 - `/admin/menu-items/<item_id>/` updates or deletes one item.
 - The `root` menu is required and should not be deleted.
 - The `root` menu is shown as the top member menu.
+- New systems seed `root` with Dashboard, Phage Book, and Profile in that order.
 - Non-root menus are available at `/menu/<menu_name>/`.
 - Menu item URLs may point to internal paths, external URLs, or menu pages.
 - The menu relationship is route-scoped and is not edited through the menu item form.

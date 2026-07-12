@@ -33,7 +33,7 @@ Use email for login. Do not use usernames.
 | `last_name` | `CharField(max_length=150, blank=True)` |  |
 | `is_active` | `BooleanField(default=True)` | Controls login |
 | `is_admin` | `BooleanField(default=False)` | Controls site admin access |
-| `date_joined` | `DateTimeField(auto_now_add=True)` | UTC |
+| `date_joined` | `DateTimeField(default=timezone.now)` | UTC |
 | `last_login` | `DateTimeField(null=True, blank=True)` | UTC |
 | `updated_at` | `DateTimeField(auto_now=True)` | UTC |
 
@@ -75,6 +75,7 @@ Rules:
 - Members cannot self-delete their profile photo in V1.
 - Bio is Markdown and sanitized on display.
 - Admins can manage profile data from user admin.
+- Registration profile completion requires first name, last name, profile photo, and bio.
 
 ## SiteSettings
 
@@ -103,6 +104,7 @@ Represents one camp year.
 | `year` | `PositiveSmallIntegerField(unique=True)` | Example: `2026` |
 | `dashboard_pre_page` | FK `ContentPage`, nullable | `PROTECT` |
 | `dashboard_post_page` | FK `ContentPage`, nullable | `PROTECT` |
+| `camp_survey` | FK `Survey`, nullable | `PROTECT` |
 | `created_at` | `DateTimeField(auto_now_add=True)` | UTC |
 | `updated_at` | `DateTimeField(auto_now=True)` | UTC |
 | `created_by` | FK `User`, nullable | `SET_NULL` |
@@ -116,6 +118,7 @@ Rules:
 - `dashboard_pre_page` appears above the dashboard checklist.
 - `dashboard_post_page` appears below the dashboard checklist.
 - Referenced dashboard pages use `PROTECT` so admins cannot accidentally delete content used by a camp year dashboard.
+- Referenced Camp surveys use `PROTECT` so admins cannot accidentally delete a survey required by a camp year.
 
 ## TaxTier
 
@@ -219,11 +222,9 @@ Member-only Markdown page.
 |---|---|---|
 | `title` | `CharField(max_length=200)` | Display title |
 | `slug` | `SlugField(unique=True)` | URL slug |
-| `body_markdown` | `TextField` | Markdown source |
+| `body_markdown` | `TextField(blank=True)` | Markdown source |
 | `created_at` | `DateTimeField(auto_now_add=True)` | UTC |
 | `updated_at` | `DateTimeField(auto_now=True)` | UTC |
-| `created_by` | FK `User`, nullable | `SET_NULL` |
-| `updated_by` | FK `User`, nullable | `SET_NULL` |
 
 Rules:
 
@@ -242,8 +243,6 @@ Named member navigation menu.
 | `menu_name` | `SlugField(unique=True)` | Internal name, not user-facing |
 | `created_at` | `DateTimeField(auto_now_add=True)` | UTC |
 | `updated_at` | `DateTimeField(auto_now=True)` | UTC |
-| `created_by` | FK `User`, nullable | `SET_NULL` |
-| `updated_by` | FK `User`, nullable | `SET_NULL` |
 
 Rules:
 
@@ -260,13 +259,11 @@ Navigation item inside a named menu.
 | Field | Type | Notes |
 |---|---|---|
 | `menu` | FK `Menu` | `CASCADE` |
-| `label` | `CharField(max_length=80)` | Display text |
+| `label` | `CharField(max_length=200)` | Display text |
 | `url` | `CharField(max_length=500)` | Internal path, external URL, or `/menu/<menu_name>/` |
-| `display_order` | `PositiveIntegerField(default=0)` | Sort order |
+| `display_order` | `IntegerField(default=0)` | Sort order |
 | `created_at` | `DateTimeField(auto_now_add=True)` | UTC |
 | `updated_at` | `DateTimeField(auto_now=True)` | UTC |
-| `created_by` | FK `User`, nullable | `SET_NULL` |
-| `updated_by` | FK `User`, nullable | `SET_NULL` |
 
 Rules:
 
@@ -289,12 +286,10 @@ Image upload record.
 | Field | Type | Notes |
 |---|---|---|
 | `original_filename` | `CharField(max_length=255)` | Original upload name |
-| `stored_filename` | `CharField(max_length=255, unique=True)` | Safe generated filename |
-| `file_path` | `CharField(max_length=500, unique=True)` | Relative to `media_root` |
+| `file_path` | `CharField(max_length=255, unique=True)` | Relative to `media_root` |
 | `content_type` | `CharField(max_length=100)` | Image MIME type |
-| `size_bytes` | `PositiveIntegerField` | File size |
+| `size_bytes` | `PositiveBigIntegerField` | File size |
 | `title` | `CharField(max_length=200, blank=True)` | Admin display title |
-| `uploaded_by` | FK `User`, nullable | `SET_NULL` |
 | `created_at` | `DateTimeField(auto_now_add=True)` | UTC |
 | `updated_at` | `DateTimeField(auto_now=True)` | UTC |
 
@@ -303,11 +298,30 @@ Rules:
 - V1 media is image-only.
 - V1 uses one flat media folder.
 - Do not store image width or height in V1.
-- Stored filename includes database ID and safe original filename.
+- `file_path` includes database ID and safe original filename.
 - Example stored filename: `481-phage-map-2026.png`.
 - Deleting a media item deletes the database record and file.
 - Profile photos reference `MediaItem`.
 - Content pages may reference media URLs in Markdown.
+
+## Survey Models
+
+The detailed survey contract lives in `design_docs/survey_design.md`. Current survey tables are:
+
+- `Survey`: name, slug, description Markdown, active flag, optional internal redirect after submission.
+- `SurveyQuestion`: question text/configuration, type, render hint, required flag, optional other-answer support, display order.
+- `SurveyChoice`: choice label/value and display order.
+- `SurveyQuestionCondition`: simple conditional visibility based on a controlling choice.
+- `SurveyResponse`: one response per survey/user.
+- `SurveyAnswer`: JSON text answer values plus question/choice snapshots.
+
+Rules:
+
+- Surveys are generic and member-facing at `/survey/<slug>/`.
+- `Survey.is_active` controls member submission/editing.
+- `Survey.redirect_after_submission_url` must be blank or an internal path starting with `/`.
+- Deleted questions preserve old answers through nullable question references and snapshots.
+- Camp years can reference one optional Camp survey through `CampYear.camp_survey`.
 
 ## Payment
 
@@ -415,9 +429,8 @@ Indexes:
 ## Excluded From V1 Models
 
 - Tax window model.
-- Survey tables.
 - Job/shift tables.
-- Roster/report tables.
+- Generic roster/report tables beyond the current Phagebook.
 - Email confirmation tables.
 - Password reset email tables.
 - Multi-currency payment tables.

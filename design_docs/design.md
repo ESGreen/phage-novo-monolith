@@ -46,7 +46,7 @@ Likely fields:
 
 `is_admin` controls whether the user can access admin pages.
 
-These account access flags should not be used for yearly camp status, payment status, survey status, or roster status.
+These account access flags should not be used for yearly camp status, payment status, survey status, or Phagebook inclusion.
 
 The product model does not need separate `is_staff` or `is_superuser` concepts. If Django needs internal staff/superuser behavior for framework compatibility, that should be treated as an implementation detail and not exposed as normal product account state.
 
@@ -322,47 +322,37 @@ Likely fields:
 
 The name and amount should be snapshotted at payment time so old payment records remain understandable even if the add-on is edited later.
 
-### Payment Requirements
+### Registration Checklist
 
-Stores the list of things a member must complete before paying taxes for a camp year.
+The dashboard stores no separate generic payment-requirement model in V1. Instead, the current checklist is hardcoded and year-aware.
 
-Payment requirements should be year-specific and configurable. The survey may be one requirement, and some form of job/shift signup has historically been part of the requirements and is expected to be part of the flow again in the future.
+Current required steps before taxes:
 
-Possible requirements:
+- Complete profile: first name, last name, profile photo, and bio.
+- Complete the configured Camp survey when `CampYear.camp_survey` is set.
 
-- Complete yearly survey.
-- Sign up for required jobs/shifts.
-- Acknowledge important information.
-- Manual admin approval.
+Taxes are considered complete when paid or waived.
 
-If no payment requirements are configured for a year, active members can proceed directly to taxes.
+A future generic requirement system may add jobs, acknowledgements, or manual approvals. Those requirements should control whether the payment button is available. They should not replace tax records or payment records.
 
-Payment requirements should control whether the payment button is available. They should not replace tax records or payment records.
+### Survey Data
 
-### Future Survey Data
+Surveys are configurable through the admin and are available to members at `/survey/<slug>/`.
 
-The survey is planned for a future version.
+Survey questions may stay mostly the same year to year, but admins can add, remove, or modify questions as needed.
 
-The survey should collect yearly member information and should be configurable through the admin. Survey questions may stay mostly the same year to year, but admins should be able to add, remove, or modify questions as needed.
-
-Survey data should be year-specific.
-
-Likely future concepts:
+Current survey concepts:
 
 - Survey.
 - Survey question.
+- Survey choice.
+- Survey condition.
 - Survey response.
 - Survey answer.
 
-The survey should eventually support generating:
+Survey answers are not stored directly on the user account. They are tied to a survey response and preserve snapshots for later review/export.
 
-- A photo/name directory.
-- A tabular roster.
-- A summary page with tabulated results.
-
-Survey answers should not be stored directly on the user account. They should remain tied to the survey and camp year.
-
-A completed survey may be one of several requirements before a member is allowed to pay taxes.
+A camp year may choose one optional Camp survey. Completing that survey can be required before taxes and before appearing in the Phagebook.
 
 ### Future Job/Shift Data
 
@@ -377,8 +367,11 @@ The site should use simple current-purpose URLs for member pages, with year-spec
 Examples:
 
 - `/dashboard/`
+- `/phagebook/`
 - `/<year>/dashboard/`
+- `/<year>/phagebook/`
 - `/<year>/taxes/`
+- `/survey/<slug>/`
 - `/pages/<slug>/`
 - `/profile/`
 
@@ -403,7 +396,7 @@ URL behavior:
 - `/public/<path>` serves static public files.
 - `/login/` remains the Django login page.
 
-Public static pages may link to Django application pages such as `/login/`, `/dashboard/`, or `/<year>/dashboard/`.
+Public static pages may link to Django application pages such as `/login/`, `/dashboard/`, `/phagebook/`, or `/<year>/dashboard/`.
 
 If a visitor follows a member-only link while logged out, Django redirects them to `/login/`.
 
@@ -470,6 +463,27 @@ Purpose:
 Example:
 
 - `/dashboard/` redirects to `/2026/dashboard/`.
+
+### Phagebook
+
+URL pattern:
+
+- `/<year>/phagebook/`
+
+Example:
+
+- `/2026/phagebook/`
+
+Current-year redirect:
+
+- `/phagebook/`
+
+Purpose:
+
+- Show a member-only directory of people fully registered for the camp year.
+- Include name, profile photo, email, and bio.
+- Allow any logged-in member to view it.
+- Include only members who have completed the camp year registration checklist.
 
 ### Pay Taxes
 
@@ -597,6 +611,7 @@ Admin sections:
 - Payments: `/admin/payments/`
 - Stripe: `/admin/stripe/`
 - Pages: `/admin/pages/`
+- Surveys: `/admin/surveys/`
 - Menus: `/admin/menus/`
 - Media: `/admin/media/`
 
@@ -641,6 +656,7 @@ This area should include:
 - Tax overrides.
 - Year dashboard pre-checklist content page reference.
 - Year dashboard post-checklist content page reference.
+- Optional Camp survey requirement.
 
 Tax overrides belong here because they are exceptions to the yearly tax rules.
 
@@ -757,37 +773,15 @@ Media uploaded here should be usable from Markdown content pages. Markdown shoul
 
 System-generated storage filenames are acceptable. A future database/storage design document should address how admins find media when the site or database has problems.
 
-## Future Survey Section
+## Surveys And Phagebook
 
-The survey is planned for a future version.
+Surveys are managed at `/admin/surveys/` and completed by members at `/survey/<slug>/`.
 
-The survey should eventually be part of the yearly dashboard flow. If enabled for a camp year, the year dashboard should show whether the member has completed the survey.
+Member survey completion defaults to `/survey/<slug>/complete/`, unless the survey has an internal Redirect after submission URL.
 
-Future URLs may include:
+The Phagebook is the current member directory. It is available at `/<year>/phagebook/`, with `/phagebook/` redirecting to the current year. Any logged-in member can view it, but only fully registered members appear.
 
-- `/<year>/survey/`
-- `/<year>/survey/complete/`
-- `/<year>/directory/`
-- `/<year>/roster/`
-- `/<year>/survey/results/`
-
-The survey may be one of the requirements before a member is allowed to pay taxes.
-
-The survey should support:
-
-- Admin-configured questions.
-- Mostly reused questions year to year.
-- New questions when needed.
-- Member response editing at any time.
-- No survey edit cutoff date.
-- Year-specific responses.
-- Reports generated from survey answers.
-
-Future survey output pages:
-
-- Photo/name directory.
-- Tabular roster.
-- Tabulated survey results.
+The current code does not include survey-results dashboards, configurable roster columns, or aggregate report pages. Those remain future reporting work.
 
 ## Future Job/Shift Section
 
@@ -1054,7 +1048,9 @@ If a person should not be allowed to pay taxes or access private information, th
 ## Resolved Design Questions
 
 - `/dashboard/` redirects to `/<year>/dashboard/`.
+- `/phagebook/` redirects to `/<year>/phagebook/`.
 - `/<year>/` may redirect to or alias `/<year>/dashboard/`.
+- Member survey pages use `/survey/<slug>/` and `/survey/<slug>/complete/`.
 - `/login/` redirects already logged-in users to `/dashboard/`.
 - Members can change their own email, with a confirmation step before saving.
 - Media starts as one flat folder with no subfolders.

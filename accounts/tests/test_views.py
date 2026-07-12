@@ -242,16 +242,39 @@ def test_profile_save_without_photo_keeps_existing_photo(client, settings, tmp_p
         "/profile/",
         {
             "action": "bio",
-            "first_name": "",
-            "last_name": "",
+            "first_name": "Ada",
+            "last_name": "Lovelace",
             "bio_markdown": "Updated bio",
         },
     )
 
     assert response.status_code == 302
+    user.refresh_from_db()
     user.profile.refresh_from_db()
+    assert user.first_name == "Ada"
+    assert user.last_name == "Lovelace"
     assert user.profile.photo_id == original_photo_id
     assert user.profile.bio_markdown == "Updated bio"
+
+
+def test_profile_bio_requires_name_and_bio(client) -> None:
+    user = create_user(first_name="Ada", last_name="Lovelace")
+    user.profile.bio_markdown = "Existing bio"
+    user.profile.save(update_fields=["bio_markdown", "updated_at"])
+    client.force_login(user)
+
+    response = client.post(
+        "/profile/",
+        {"action": "bio", "first_name": "", "last_name": "", "bio_markdown": ""},
+    )
+
+    assert response.status_code == 200
+    assert response.content.count(b"This field is required.") == 3
+    user.refresh_from_db()
+    user.profile.refresh_from_db()
+    assert user.first_name == "Ada"
+    assert user.last_name == "Lovelace"
+    assert user.profile.bio_markdown == "Existing bio"
 
 
 def test_member_can_change_password_and_stay_logged_in(client) -> None:

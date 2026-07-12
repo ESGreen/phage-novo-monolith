@@ -28,7 +28,7 @@ This document supersedes older future-looking survey notes in the existing desig
 - No image/photo upload survey questions in V1.
 - No matrix/grid questions in V1.
 - No multi-page survey builder in V1.
-- No directory, roster, aggregate-report, or payment-requirement integration in the first survey implementation unless separately prioritized.
+- No survey-powered configurable directory, roster, aggregate-report, or generic payment-requirement engine in the first survey implementation unless separately prioritized.
 - No numeric analytics over answer values in V1.
 
 ## Vocabulary
@@ -983,7 +983,7 @@ Camp survey integration tests should cover:
 
 - Camp year admin `Dashboard Setup` renders dashboard pages and Camp survey selector in the same card.
 - Updating Dashboard Setup saves pre-page, post-page, and camp survey together.
-- Camp overview summarizes the selected camp survey.
+- Camp year admin redirects back to `#dashboard-setup` after creating a camp year or updating Dashboard Setup.
 - Camp survey selection protects the selected survey from deletion.
 - Dashboard without a camp survey keeps the Profile and Taxes checklist behavior.
 - Dashboard with an incomplete active camp survey shows Survey between Profile and Taxes.

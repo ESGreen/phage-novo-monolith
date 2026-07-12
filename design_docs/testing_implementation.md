@@ -186,9 +186,9 @@ Cover:
 - SVG rejected.
 - Non-image rejected.
 - Oversized image rejected.
-- Stored filename includes media ID and safe original filename.
+- Stored `file_path` includes media ID and safe original filename.
 - File is stored in flat media folder.
-- Media URL uses `/media/<stored_filename>`.
+- Media URL uses `/media/<file_path>`.
 - Deleting media deletes database row and file.
 - Profile photo upload uses same validation rules.
 
@@ -213,11 +213,16 @@ Cover:
 
 - Current year is max configured camp year.
 - `/dashboard/` redirects to current year dashboard.
+- `/phagebook/` redirects to current year Phagebook.
 - `/<year>/dashboard/` loads.
+- `/<year>/phagebook/` loads.
 - Dashboard renders pre/post content pages.
-- Dashboard requires profile photo and bio before taxes are current.
+- Dashboard requires first name, last name, profile photo, and bio before taxes are current.
+- Dashboard requires configured Camp survey before taxes are current.
 - Dashboard shows paid and waived taxes as `Taxes - Paid`.
 - Dashboard shows the fully registered message when profile and taxes are complete.
+- Phagebook is visible to any logged-in member.
+- Phagebook only includes fully registered members.
 - Tax tiers are available inside start/expiration dates.
 - Tax tiers unavailable before start.
 - Tax tiers unavailable after expiration.
@@ -289,6 +294,7 @@ Cover each admin section:
 - `/admin/payments/`.
 - `/admin/stripe/`.
 - `/admin/pages/`.
+- `/admin/surveys/`.
 - `/admin/menus/`.
 - `/admin/media/`.
 
@@ -335,6 +341,7 @@ Cover:
 - `/public/` loads.
 - `/login/` loads.
 - Anonymous `/dashboard/` redirects to login.
+- Anonymous `/phagebook/` redirects to login.
 - Static assets load.
 - Known media URL loads if configured.
 - HTTPS works.
@@ -352,7 +359,8 @@ Do not add tests for features that do not exist:
 - Public registration.
 - Two-factor auth.
 - Member impersonation.
-- Survey/jobs/roster behavior.
+- Future job/signup behavior.
+- Future survey report behavior.
 - Multi-currency payments.
 - Non-card Stripe payment methods.
 - Image resizing.

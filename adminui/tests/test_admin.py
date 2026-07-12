@@ -1383,7 +1383,9 @@ def test_admin_menu_edit_loads_items_and_url_suggestions(client) -> None:
     assert 'src="/static/js/admin-menus.js"' in body
     assert 'data-url-combobox-input="true"' in body
     assert 'data-url-suggestion="/dashboard/"' in body
+    assert 'data-url-suggestion="/phagebook/"' in body
     assert 'data-url-suggestion="/2026/dashboard/"' in body
+    assert 'data-url-suggestion="/2026/phagebook/"' in body
     assert 'data-url-suggestion="/2026/taxes/"' in body
     assert 'data-url-suggestion="/profile/"' in body
     assert 'data-url-suggestion="/pages/arrival/"' in body

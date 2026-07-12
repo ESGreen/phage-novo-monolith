@@ -96,6 +96,8 @@ Likely fields:
 
 The profile should not store contact details, yearly participation status, payment status, or survey answers.
 
+Registration profile completion uses first name and last name from `User`, plus profile photo and bio from `MemberProfile`.
+
 Members can replace their profile photo through the profile page. Members do not need a self-service profile photo delete action in V1.
 
 ## Camp Years
@@ -113,7 +115,7 @@ Likely fields:
 
 The current year can be inferred from the maximum configured year or from context.
 
-Tax tiers, add-ons, payments, future surveys, and future jobs point to a camp year.
+Tax tiers, add-ons, payments, and the optional Camp survey point to a camp year. Future jobs may also point to a camp year.
 
 ## Content Pages
 
@@ -184,6 +186,7 @@ URLs may also point to another member-only menu page.
 Examples:
 
 - `/dashboard/`
+- `/phagebook/`
 - `/2026/taxes/`
 - `/profile/`
 - `/pages/camp-info/`
@@ -427,19 +430,20 @@ Possible future requirements:
 
 This does not need to be implemented in the first database pass unless the feature is active.
 
-## Future Survey Tables
+## Survey Tables
 
-Future survey tables may include:
+The current app includes survey tables for:
 
 - Surveys.
 - Survey questions.
 - Survey choices.
+- Survey question conditions.
 - Survey responses.
 - Survey answers.
 
-Survey data should be tied to a camp year.
+Surveys are generic and accessed at `/survey/<slug>/`. A camp year may optionally select one survey as its Camp survey.
 
-Survey answers should not be stored directly on users.
+Survey answers are not stored directly on users.
 
 ## Future Job/Shift Tables
 

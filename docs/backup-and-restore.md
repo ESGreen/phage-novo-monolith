@@ -506,6 +506,7 @@ Steps:
 - Run deployment verification tests.
 - Check `/admin/stripe/`.
 - Check `/dashboard/`.
+- Check `/phagebook/`.
 
 ## Broken Deployment
 

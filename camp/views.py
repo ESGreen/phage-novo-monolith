@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -14,12 +15,17 @@ from payments.checkout import (
     get_unexpired_created_payment,
 )
 from payments.models import Payment
-from surveys.models import SurveyResponse
 
 from .forms import TaxSelectionForm
 from .models import CampYear
-from .services import get_current_camp_year
-from .taxes import get_tax_override, is_tax_waived
+from .services import (
+    are_taxes_complete,
+    get_current_camp_year,
+    is_camp_survey_complete,
+    is_profile_complete,
+    is_registration_complete,
+)
+from .taxes import get_tax_override
 
 
 @member_required
@@ -34,6 +40,14 @@ def dashboard_redirect(request: HttpRequest) -> HttpResponse:
 def year_redirect(request: HttpRequest, year: int) -> HttpResponseRedirect:
     get_object_or_404(CampYear, year=year)
     return redirect("camp:dashboard", year=year)
+
+
+@member_required
+def phagebook_redirect(request: HttpRequest) -> HttpResponse:
+    camp_year = get_current_camp_year()
+    if camp_year is None:
+        return render(request, "camp/no_camp_year.html")
+    return redirect("camp:phagebook", year=camp_year.year)
 
 
 @member_required
@@ -68,20 +82,19 @@ def dashboard(request: HttpRequest, year: int) -> HttpResponse:
 
 
 def _dashboard_items(user: object, camp_year: CampYear) -> list[dict[str, object]]:
-    profile = user.profile
-    profile_complete = bool(profile.photo_id and profile.bio_markdown.strip())
-    taxes_complete = get_paid_payment(user, camp_year) is not None or is_tax_waived(user, camp_year)
-    survey_complete = _camp_survey_complete(user, camp_year)
+    profile_complete = is_profile_complete(user)
+    taxes_complete = are_taxes_complete(user, camp_year)
+    survey_complete = is_camp_survey_complete(user, camp_year)
     items = [
         {
             "key": "profile",
             "title": "Profile",
             "complete": profile_complete,
             "complete_description": (
-                "Check your picture / bio. You can always update them if you don't like "
-                "the picture."
+                "Check your name / picture / bio. You can always update them if you don't "
+                "like the picture."
             ),
-            "incomplete_description": "Add a picture and bio to your profile",
+            "incomplete_description": "Add your name, picture, and bio to your profile",
             "current_action_label": "Complete Profile",
             "complete_action_label": "Edit Profile",
             "action_url": reverse("accounts:profile"),
@@ -142,17 +155,33 @@ def _dashboard_items(user: object, camp_year: CampYear) -> list[dict[str, object
     return items
 
 
-def _camp_survey_complete(user: object, camp_year: CampYear) -> bool:
-    if not camp_year.camp_survey_id:
-        return True
-    return SurveyResponse.objects.filter(survey=camp_year.camp_survey, user=user).exists()
-
-
 def _tax_prerequisites_complete(user: object, camp_year: CampYear) -> bool:
-    profile = user.profile
-    return bool(profile.photo_id and profile.bio_markdown.strip()) and _camp_survey_complete(
-        user,
-        camp_year,
+    return is_profile_complete(user) and is_camp_survey_complete(user, camp_year)
+
+
+@member_required
+def phagebook(request: HttpRequest, year: int) -> HttpResponse:
+    camp_year = get_object_or_404(CampYear.objects.select_related("camp_survey"), year=year)
+    entries = []
+    users = (
+        get_user_model()
+        .objects.filter(is_active=True)
+        .select_related("profile__photo")
+        .order_by("last_name", "first_name", "email")
+    )
+    for user in users:
+        if is_registration_complete(user, camp_year):
+            entries.append(
+                {
+                    "user": user,
+                    "bio_html": render_markdown(user.profile.bio_markdown),
+                },
+            )
+
+    return render(
+        request,
+        "camp/phagebook.html",
+        {"camp_year": camp_year, "entries": entries},
     )
 
 

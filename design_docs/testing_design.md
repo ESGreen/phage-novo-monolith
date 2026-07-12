@@ -144,12 +144,18 @@ Automated tests should cover:
 - Anonymous users can access `/public/`.
 - Anonymous users can access `/login/`.
 - Anonymous users visiting `/dashboard/` are redirected to `/login/`.
+- Anonymous users visiting `/phagebook/` are redirected to `/login/`.
 - Anonymous users visiting `/<year>/dashboard/` are redirected to `/login/`.
+- Anonymous users visiting `/<year>/phagebook/` are redirected to `/login/`.
 - Anonymous users visiting `/<year>/taxes/` are redirected to `/login/`.
+- Anonymous users visiting `/survey/<slug>/` are redirected to `/login/`.
 - Anonymous users visiting `/profile/` are redirected to `/login/`.
 - Anonymous users visiting `/admin/` are redirected to `/login/` or otherwise blocked before admin access.
 - Logged-in members can access `/dashboard/`.
+- Logged-in members can access `/phagebook/`.
 - Logged-in members can access `/<year>/dashboard/`.
+- Logged-in members can access `/<year>/phagebook/`.
+- Logged-in members can access active `/survey/<slug>/` pages.
 - Logged-in members can access `/profile/`.
 - Logged-in members cannot access `/admin/`.
 - Logged-in non-admin users visiting `/admin/` receive `403 Forbidden`.
@@ -158,6 +164,7 @@ Automated tests should cover:
 - Logged-in non-admin users visiting `/admin/payments/` receive `403 Forbidden`.
 - Logged-in non-admin users visiting `/admin/stripe/` receive `403 Forbidden`.
 - Logged-in non-admin users visiting `/admin/pages/` receive `403 Forbidden`.
+- Logged-in non-admin users visiting `/admin/surveys/` receive `403 Forbidden`.
 - Logged-in non-admin users visiting `/admin/menus/` receive `403 Forbidden`.
 - Logged-in non-admin users visiting `/admin/media/` receive `403 Forbidden`.
 - Admin users can access `/admin/`.
@@ -166,6 +173,7 @@ Automated tests should cover:
 - Inactive users cannot access authenticated pages.
 - Already logged-in users visiting `/login/` are redirected to `/dashboard/`.
 - `/dashboard/` redirects to the current year dashboard.
+- `/phagebook/` redirects to the current year Phagebook.
 - `/<year>/` redirects to or aliases `/<year>/dashboard/`.
 
 ## Public Static Page Tests
@@ -193,7 +201,9 @@ Automated tests should cover:
 
 - The current camp year is inferred from the maximum configured camp year.
 - `/dashboard/` redirects to the current year dashboard.
+- `/phagebook/` redirects to the current year Phagebook.
 - `/<year>/dashboard/` loads for an existing camp year.
+- `/<year>/phagebook/` loads for an existing camp year.
 - `/<year>/` redirects to or aliases `/<year>/dashboard/`.
 - Old year dashboards can still load, such as `/2025/dashboard/`.
 - Unknown years return `404`.
@@ -202,7 +212,9 @@ Automated tests should cover:
 - Dashboard renders post-checklist Markdown content when configured.
 - Dashboard shows required steps/checklist items.
 - Dashboard shows whether each required step is complete.
-- Dashboard requires both profile photo and bio before the profile step is complete.
+- Dashboard requires first name, last name, profile photo, and bio before the profile step is complete.
+- Dashboard shows a Camp Survey step before Taxes when configured.
+- Dashboard locks Taxes until the configured Camp survey is complete.
 - Dashboard locks future steps until earlier steps are complete.
 - Dashboard shows a taxes action only when taxes are the current step.
 - Dashboard displays paid and waived tax completion as `Taxes - Paid`.
@@ -502,6 +514,7 @@ Automated tests should cover:
 - Admin users can access `/admin/payments/`.
 - Admin users can access `/admin/stripe/`.
 - Admin users can access `/admin/pages/`.
+- Admin users can access `/admin/surveys/`.
 - Admin users can access `/admin/menus/`.
 - Admin users can access `/admin/media/`.
 
@@ -939,9 +952,8 @@ The V1 test suite should avoid testing features that do not exist yet.
 
 Do not add automated tests for:
 
-- Survey behavior.
 - Survey reports.
-- Directory/roster pages.
+- Future configurable roster/report pages beyond Phagebook.
 - Job/shift signup.
 - Job/shift payment requirements.
 - Complex public page editing.
@@ -963,6 +975,8 @@ V1 tests should stay focused on:
 - Admin-only behavior.
 - Profile editing.
 - Year dashboard behavior.
+- Surveys.
+- Phagebook.
 - Tax calculation.
 - Tax overrides.
 - Stripe checkout.
