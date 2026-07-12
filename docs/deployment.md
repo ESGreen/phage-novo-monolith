@@ -555,14 +555,15 @@ High-level deployment sequence:
 9. Run Django checks and migrations.
 10. Sync public files.
 11. Collect Django static files.
-12. Create first admin if needed.
-13. Install/update `thephage.service`.
-14. Install/update Nginx site config.
-15. Start/restart the app service.
-16. Reload Nginx.
-17. Run certbot for TLS if this is the first deployment.
-18. Install/update backup scripts and timer.
-19. Run deployment verification checks.
+12. Run the deployment check script.
+13. Create first admin if needed.
+14. Install/update `thephage.service`.
+15. Install/update Nginx site config.
+16. Start/restart the app service.
+17. Reload Nginx.
+18. Run certbot for TLS if this is the first deployment.
+19. Install/update backup scripts and timer.
+20. Run deployment verification checks.
 
 Representative commands after code is deployed:
 
@@ -572,9 +573,18 @@ sudo -u phage THEPHAGE_CONFIG=/etc/thephage/thephage.toml /opt/thephage/venv/bin
 sudo -u phage THEPHAGE_CONFIG=/etc/thephage/thephage.toml /opt/thephage/venv/bin/python /opt/thephage/app/manage.py migrate
 sudo -u phage rsync -a --delete /opt/thephage/app/public/ /var/www/thephage/public/
 sudo -u phage THEPHAGE_CONFIG=/etc/thephage/thephage.toml /opt/thephage/venv/bin/python /opt/thephage/app/manage.py collectstatic --noinput
+sudo -u phage /opt/thephage/app/deploy/scripts/checkDeployment.sh
 sudo systemctl restart thephage.service
 sudo nginx -t
 sudo systemctl reload nginx
+```
+
+The deployment check script is read-only. It verifies the installed app, virtualenv, TOML config, package dependencies, Django checks, unapplied migrations, Stripe config, and configured filesystem directories. It does not install code, run migrations, collect static files, or restart services.
+
+Optional overrides:
+
+```bash
+sudo -u phage THEPHAGE_APP_ROOT=/opt/thephage/app THEPHAGE_VENV=/opt/thephage/venv THEPHAGE_CONFIG=/etc/thephage/thephage.toml /opt/thephage/app/deploy/scripts/checkDeployment.sh
 ```
 
 ## Logs

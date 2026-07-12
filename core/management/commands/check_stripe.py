@@ -22,7 +22,10 @@ class Command(BaseCommand):
         if any(not value for value in required_values):
             raise CommandError("Stripe config is incomplete.")
 
-        site_settings = SiteSettings.load()
+        try:
+            site_settings = SiteSettings.objects.get(pk=SiteSettings.SINGLETON_PK)
+        except SiteSettings.DoesNotExist as error:
+            raise CommandError("Site settings row is missing.") from error
         if site_settings.stripe_mode not in SiteSettings.StripeMode.values:
             raise CommandError("Stored Stripe mode is invalid.")
 
