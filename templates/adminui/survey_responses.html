@@ -1,0 +1,39 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Survey Responses: {{ survey.name }} - The Phage{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <h1>Survey Responses: {{ survey.name }}</h1>
+    <p>
+      <a href="{% url 'adminui:survey-edit' survey.slug %}">Back to survey</a>
+    </p>
+  </div>
+
+  <section class="content-card">
+    <h2>Responses</h2>
+    {% if response_rows %}
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            {% for question in questions %}<th>{{ question.name }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+        {% for response_row in response_rows %}
+          <tr>
+            <td>{{ response_row.name }}</td>
+            <td>{{ response_row.email }}</td>
+            {% for answer in response_row.answers %}<td>{{ answer }}</td>{% endfor %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No responses yet.</p>
+    {% endif %}
+    <p><a class="secondary-button" href="{% url 'adminui:survey-export' survey.slug %}">Export CSV</a></p>
+  </section>
+{% endblock %}

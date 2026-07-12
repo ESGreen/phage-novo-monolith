@@ -1,0 +1,86 @@
+{% extends "admin_base.html" %}
+{% load static %}
+
+{% block title %}Surveys Admin - The Phage{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <h1>Surveys</h1>
+  </div>
+
+  <section class="content-card">
+    <h2>Surveys</h2>
+    <div class="table-tools" data-surveys-controls>
+      <label><input type="checkbox" data-surveys-active-only checked> Show active only</label>
+      <p class="table-count" data-surveys-count></p>
+    </div>
+    {{ survey_rows|json_script:"survey-list-data" }}
+    {% if surveys %}
+      <table data-surveys-table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Slug</th>
+            <th>Active</th>
+            <th>Responses</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for survey in surveys %}
+          <tr data-fallback-survey-row="{{ survey.slug }}">
+            <td><a class="secondary-button" href="{% url 'adminui:survey-edit' survey.slug %}">Edit: {{ survey.name }}</a></td>
+            <td>{{ survey.slug }}</td>
+            <td>{{ survey.is_active }}</td>
+            <td>{{ survey.response_count }}</td>
+            <td><a class="secondary-button" href="{% url 'adminui:survey-responses' survey.slug %}">View Responses</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <table data-surveys-table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Slug</th>
+            <th>Active</th>
+            <th>Responses</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    {% endif %}
+    <p data-surveys-empty{% if surveys %} hidden{% endif %}>No surveys found.</p>
+  </section>
+
+  <section id="create-survey" class="content-card">
+    <h2>Create Survey</h2>
+    <form method="post" action="{% url 'adminui:surveys' %}#create-survey" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create_survey">
+      {{ form.non_field_errors }}
+      <div class="form-row">
+        {{ form.name.label_tag }}
+        {{ form.name }}
+        {{ form.name.errors }}
+      </div>
+      <div class="form-row">
+        {{ form.slug.label_tag }}
+        {{ form.slug }}
+        {{ form.slug.errors }}
+      </div>
+      <div class="form-row">
+        {{ form.description_markdown.label_tag }}
+        {{ form.description_markdown }}
+        {{ form.description_markdown.errors }}
+      </div>
+      <button type="submit">Create Survey</button>
+    </form>
+  </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/admin-surveys.js' %}" defer></script>
+{% endblock %}

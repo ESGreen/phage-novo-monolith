@@ -1,0 +1,90 @@
+{% extends "admin_base.html" %}
+
+{% block title %}Edit Question: {{ question.name }} - The Phage{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <h1>Edit Question: {{ question.name }}</h1>
+    <p><a href="{% url 'adminui:survey-edit' survey.slug %}#question-{{ question.id }}">Back to {{ survey.name }}</a></p>
+  </div>
+
+  <section id="question-details" class="content-card">
+    <h2>Question Details</h2>
+    <form id="question-detail-form-{{ question.id }}" method="post" action="{% url 'adminui:survey-question-edit' survey.slug question.id %}#question-details" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="update_question">
+    </form>
+    {{ question_form.non_field_errors }}
+    {{ option_form.non_field_errors }}
+    <div class="form-grid">
+      <div class="form-row">
+        {{ question_form.name.label_tag }}
+        {{ question_form.name }}
+        {{ question_form.name.errors }}
+      </div>
+      <div class="form-row">
+        {{ question_form.render_hint.label_tag }}
+        {{ question_form.render_hint }}
+        {{ question_form.render_hint.errors }}
+      </div>
+    </div>
+    <div class="form-row">
+      {{ question_form.description_markdown.label_tag }}
+      {{ question_form.description_markdown }}
+      {{ question_form.description_markdown.errors }}
+    </div>
+    <div class="checkbox-list">
+      <label>{{ question_form.is_required }} Required</label>
+      {{ question_form.is_required.errors }}
+    </div>
+    {% if question.is_choice_based %}
+      <div class="checkbox-list">
+        <label>{{ option_form.allows_other }} Allow other</label>
+        {{ option_form.allows_other.errors }}
+      </div>
+      <div class="form-row">
+        {{ option_form.other_label.label_tag }}
+        {{ option_form.other_label }}
+        {{ option_form.other_label.errors }}
+      </div>
+    {% endif %}
+    <button type="submit" form="question-detail-form-{{ question.id }}">Update Question</button>
+  </section>
+
+  <section id="conditional" class="content-card">
+    <h2>Conditional</h2>
+    {% if condition_form.has_late_current_parent %}
+      <p class="help-text">This question currently depends on a question that appears later in the survey. Consider moving the controlling question above this one.</p>
+    {% endif %}
+    <form method="post" action="{% url 'adminui:survey-question-edit' survey.slug question.id %}#conditional" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="update_conditions">
+      {{ condition_form.non_field_errors }}
+      <div class="checkbox-list">
+        <label>{{ condition_form.has_conditions }} {{ condition_form.has_conditions.label }}</label>
+        {{ condition_form.has_conditions.errors }}
+      </div>
+      <div class="form-row">
+        {{ condition_form.depends_on_question.label_tag }}
+        {{ condition_form.depends_on_question }}
+        {{ condition_form.depends_on_question.errors }}
+      </div>
+      <div class="form-row">
+        {{ condition_form.visible_if_choices.label_tag }}
+        {{ condition_form.visible_if_choices }}
+        {{ condition_form.visible_if_choices.errors }}
+      </div>
+      <button type="submit">Update Conditions</button>
+    </form>
+  </section>
+
+  <section class="content-card danger-card">
+    <h2>Delete Question</h2>
+    <p class="help-text">Delete this question. Existing answers keep their snapshots for historical review.</p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="delete_question">
+      <button type="submit" class="danger-button">Delete Question</button>
+    </form>
+  </section>
+{% endblock %}

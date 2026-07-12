@@ -288,6 +288,22 @@ input.visually-hidden {
   white-space: nowrap;
 }
 
+.choice-inline-form {
+  align-items: start;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(10rem, 1fr) minmax(10rem, 1fr) auto;
+}
+
+.choice-inline-form .form-row {
+  margin-bottom: 0;
+}
+
+.choice-inline-form button {
+  align-self: end;
+  white-space: nowrap;
+}
+
 .form-actions {
   align-items: center;
   display: flex;
@@ -885,6 +901,14 @@ td {
 
   .input-with-button {
     flex-direction: column;
+  }
+
+  .choice-inline-form {
+    grid-template-columns: 1fr;
+  }
+
+  .choice-inline-form button {
+    justify-self: start;
   }
 
   .status-list li {

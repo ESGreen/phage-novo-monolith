@@ -11,6 +11,7 @@ urlpatterns = [
     path("", include("content.urls")),
     path("", include("core.urls")),
     path("", include("payments.urls")),
+    path("", include("surveys.urls")),
 ]
 
 if settings.DEBUG:

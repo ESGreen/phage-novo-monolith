@@ -4,14 +4,14 @@
 
 This guide describes the current maintainer UI under `/admin/`.
 
-Use this when making yearly content, user, menu, media, tax, payment, or Stripe changes.
+Use this when making yearly content, user, survey, menu, media, tax, payment, or Stripe changes.
 
 ## Access And Navigation
 
 - Admin pages require a logged-in active user with `is_admin = true`.
 - Logged-in non-admin members receive `403` for admin pages.
 - The header title `The Phage Admin` links to `/admin/`.
-- The admin nav links directly to Users, Camp, Payments, Stripe, Pages, Menus, Media, and Member site.
+- The admin nav links directly to Users, Camp, Payments, Stripe, Pages, Surveys, Menus, Media, and Member site.
 - There is no separate `Home` nav item because the title link already goes to the admin home page.
 - The Member site link opens `/dashboard/` so admins can check what members see.
 
@@ -138,6 +138,50 @@ Page edit URL:
 The page edit screen supports updating title, slug, and Markdown body. `Update and Back` returns to `/admin/pages/`. `Update and View` saves and opens the member-facing page.
 
 Page deletion is available from the page edit screen. A page that is referenced by another record, such as a camp year dashboard slot, cannot be deleted until that reference is removed.
+
+## Surveys
+
+Overview URL:
+
+```text
+/admin/surveys/
+```
+
+The surveys overview lists active surveys by default, with a checkbox to show inactive surveys too. Create Survey accepts name, slug, and Markdown description. New surveys are active by default.
+
+Survey edit URL:
+
+```text
+/admin/surveys/<slug>/
+```
+
+The survey edit page manages survey details, question order, question updates, choice creation/editing/reordering/deletion, add-question workflow, and protected survey deletion.
+
+The surveys overview also shows response counts and a View Responses action.
+
+Survey responses URL:
+
+```text
+/admin/surveys/<slug>/responses/
+```
+
+The responses page shows one row per response, with member name, member email, and one column per current survey question. The Export CSV button downloads the same table as `/admin/surveys/<slug>/responses.csv`.
+
+Question detail URL:
+
+```text
+/admin/surveys/<slug>/<question_id>/
+```
+
+The question detail page manages the same question fields, conditional display rules, and protected question deletion.
+
+Member survey URL:
+
+```text
+/survey/<slug>/
+```
+
+Members can submit or revise their own response while the survey is active. Successful submission redirects to `/survey/<slug>/complete/`.
 
 ## Menus
 

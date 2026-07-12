@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "content",
     "core",
     "payments",
+    "surveys",
 ]
 
 MIDDLEWARE = [

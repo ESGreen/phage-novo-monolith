@@ -1,0 +1,13 @@
+{% extends "member_base.html" %}
+
+{% block title %}Survey Complete - The Phage{% endblock %}
+
+{% block content %}
+  <section class="content-card narrow-card">
+    <h1>Survey Complete</h1>
+    <p>Your response to {{ survey.name }} has been saved.</p>
+    {% if survey.is_active %}
+      <p><a class="secondary-button" href="{% url 'surveys:survey-detail' survey.slug %}">Review your answers</a></p>
+    {% endif %}
+  </section>
+{% endblock %}

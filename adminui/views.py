@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import csv
+import io
+
 from django.contrib import messages
 from django.contrib.auth.forms import SetPasswordForm
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -19,6 +22,25 @@ from camp.services import get_current_camp_year
 from content.models import ContentPage, MediaItem, Menu, MenuItem
 from core.models import SiteSettings
 from payments.models import Payment, PaymentLog
+from surveys.forms import (
+    SurveyAdminForm,
+    SurveyChoiceCreateForm,
+    SurveyChoiceForm,
+    SurveyConditionForm,
+    SurveyCreateForm,
+    SurveyQuestionAdminForm,
+    SurveyQuestionCreateForm,
+    SurveyQuestionOptionsForm,
+)
+from surveys.models import Survey, SurveyAnswer, SurveyChoice, SurveyQuestion
+from surveys.question_types import is_choice_question_type
+from surveys.services import (
+    load_answer_json,
+    move_choice,
+    move_question,
+    next_choice_order,
+    next_question_order,
+)
 
 from .forms import (
     AdminUserCreateForm,
@@ -450,6 +472,289 @@ def page_edit(request: HttpRequest, slug: str) -> HttpResponse:
 
 
 @admin_required
+def surveys(request: HttpRequest) -> HttpResponse:
+    form = SurveyCreateForm()
+
+    if request.method == "POST" and request.POST.get("action") == "create_survey":
+        form = SurveyCreateForm(request.POST)
+        if form.is_valid():
+            survey = form.save()
+            messages.success(request, "Survey created.")
+            return redirect("adminui:survey-edit", slug=survey.slug)
+
+    all_surveys = list(
+        Survey.objects.annotate(response_count=Count("responses")).order_by("name", "slug"),
+    )
+    return render(
+        request,
+        "adminui/surveys.html",
+        {
+            "form": form,
+            "survey_rows": [
+                {
+                    "edit_url": reverse("adminui:survey-edit", kwargs={"slug": survey.slug}),
+                    "is_active": survey.is_active,
+                    "name": survey.name,
+                    "response_count": survey.response_count,
+                    "responses_url": reverse(
+                        "adminui:survey-responses",
+                        kwargs={"slug": survey.slug},
+                    ),
+                    "slug": survey.slug,
+                }
+                for survey in all_surveys
+            ],
+            "surveys": [survey for survey in all_surveys if survey.is_active],
+        },
+    )
+
+
+@admin_required
+def survey_edit(request: HttpRequest, slug: str) -> HttpResponse:
+    survey = get_object_or_404(Survey, slug=slug)
+    survey_form = SurveyAdminForm(instance=survey)
+    question_create_form = SurveyQuestionCreateForm(survey=survey)
+    bound_question_forms = {}
+    bound_option_forms = {}
+    bound_choice_forms = {}
+    bound_choice_create_forms = {}
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "update_survey":
+            survey_form = SurveyAdminForm(request.POST, instance=survey)
+            if survey_form.is_valid():
+                updated_survey = survey_form.save()
+                messages.success(request, "Survey updated.")
+                return redirect(_survey_section_url(updated_survey, "survey-details"))
+        elif action == "create_question":
+            question_create_form = SurveyQuestionCreateForm(request.POST, survey=survey)
+            if question_create_form.is_valid():
+                question = question_create_form.save(display_order=next_question_order(survey))
+                messages.success(request, "Question created.")
+                return redirect(_survey_section_url(survey, f"question-{question.id}"))
+        elif action in {
+            "update_question",
+            "edit_question",
+            "question_move_up",
+            "question_move_down",
+        }:
+            question = get_object_or_404(
+                SurveyQuestion,
+                pk=request.POST.get("question_id"),
+                survey=survey,
+            )
+            question_form = SurveyQuestionAdminForm(request.POST, instance=question)
+            option_form = SurveyQuestionOptionsForm(request.POST, question=question)
+            if question_form.is_valid() and option_form.is_valid():
+                question_form.save()
+                option_form.save()
+                if action == "question_move_up":
+                    move_question(question, "up")
+                elif action == "question_move_down":
+                    move_question(question, "down")
+                elif action == "edit_question":
+                    messages.success(request, "Question updated.")
+                    return redirect(
+                        "adminui:survey-question-edit",
+                        slug=survey.slug,
+                        question_id=question.id,
+                    )
+                messages.success(request, "Question updated.")
+                return redirect(_survey_section_url(survey, f"question-{question.id}"))
+            bound_question_forms[question.id] = question_form
+            bound_option_forms[question.id] = option_form
+        elif action == "create_choice":
+            question = get_object_or_404(
+                SurveyQuestion,
+                pk=request.POST.get("question_id"),
+                survey=survey,
+            )
+            question_form = SurveyQuestionAdminForm(request.POST, instance=question)
+            option_form = SurveyQuestionOptionsForm(request.POST, question=question)
+            choice_form = SurveyChoiceCreateForm(request.POST, question=question)
+            question_forms_valid = question_form.is_valid() and option_form.is_valid()
+            if question_forms_valid:
+                question_form.save()
+                option_form.save()
+            if question_forms_valid and choice_form.is_valid():
+                choice = choice_form.save(commit=False)
+                choice.display_order = next_choice_order(question)
+                choice.save()
+                messages.success(request, "Choice created.")
+                return redirect(_survey_section_url(survey, f"question-{question.id}"))
+            bound_question_forms[question.id] = question_form
+            bound_option_forms[question.id] = option_form
+            bound_choice_create_forms[question.id] = choice_form
+        elif action == "update_choice":
+            choice = get_object_or_404(
+                SurveyChoice.objects.select_related("question", "question__survey"),
+                pk=request.POST.get("choice_id"),
+                question__survey=survey,
+            )
+            choice_form = SurveyChoiceForm(request.POST, instance=choice)
+            if choice_form.is_valid():
+                choice_form.save()
+                messages.success(request, "Choice updated.")
+                return redirect(_survey_section_url(survey, f"question-{choice.question_id}"))
+            bound_choice_forms[choice.id] = choice_form
+        elif action in {"choice_move_up", "choice_move_down"}:
+            choice = get_object_or_404(
+                SurveyChoice.objects.select_related("question", "question__survey"),
+                pk=request.POST.get("choice_id"),
+                question__survey=survey,
+            )
+            move_choice(choice, "up" if action == "choice_move_up" else "down")
+            return redirect(_survey_section_url(survey, f"question-{choice.question_id}"))
+        elif action == "delete_choice":
+            choice = get_object_or_404(
+                SurveyChoice.objects.select_related("question", "question__survey"),
+                pk=request.POST.get("choice_id"),
+                question__survey=survey,
+            )
+            question_id = choice.question_id
+            try:
+                choice.delete()
+                messages.success(request, "Choice deleted.")
+            except ValidationError as error:
+                messages.error(request, error.messages[0])
+            return redirect(_survey_section_url(survey, f"question-{question_id}"))
+        elif action == "delete_survey":
+            confirmation = request.POST.get("confirm", "")
+            answer_count = SurveyAnswer.objects.filter(response__survey=survey).count()
+            response_count = survey.responses.count()
+            if (answer_count or response_count) and confirmation != "delete":
+                messages.error(
+                    request,
+                    "Type delete to confirm deleting this survey and its responses.",
+                )
+                return redirect(_survey_section_url(survey, "delete-survey"))
+            survey.delete()
+            messages.success(request, "Survey deleted.")
+            return redirect("adminui:surveys")
+
+    return render(
+        request,
+        "adminui/survey_edit.html",
+        {
+            "question_cards": _survey_question_cards(
+                survey,
+                bound_question_forms,
+                bound_option_forms,
+                bound_choice_forms,
+                bound_choice_create_forms,
+            ),
+            "question_create_form": question_create_form,
+            "survey": survey,
+            "survey_form": survey_form,
+            "survey_answer_count": SurveyAnswer.objects.filter(response__survey=survey).count(),
+            "survey_response_count": survey.responses.count(),
+        },
+    )
+
+
+@admin_required
+def survey_question_edit(request: HttpRequest, slug: str, question_id: int) -> HttpResponse:
+    survey = get_object_or_404(Survey, slug=slug)
+    question = get_object_or_404(SurveyQuestion, pk=question_id, survey=survey)
+    question_form = SurveyQuestionAdminForm(instance=question)
+    option_form = SurveyQuestionOptionsForm(question=question)
+    condition_form = SurveyConditionForm(question=question)
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "update_question":
+            question_form = SurveyQuestionAdminForm(request.POST, instance=question)
+            option_form = SurveyQuestionOptionsForm(request.POST, question=question)
+            if question_form.is_valid() and option_form.is_valid():
+                question_form.save()
+                option_form.save()
+                messages.success(request, "Question updated.")
+                return redirect(_survey_question_section_url(survey, question, "question-details"))
+        elif action == "update_conditions":
+            condition_form = SurveyConditionForm(request.POST, question=question)
+            if condition_form.is_valid():
+                condition_form.save()
+                messages.success(request, "Conditions updated.")
+                return redirect(_survey_question_section_url(survey, question, "conditional"))
+        elif action == "delete_question":
+            question.delete()
+            messages.success(request, "Question deleted.")
+            return redirect(_survey_section_url(survey, "create-question"))
+
+    _set_form_attr(question_form, f"question-detail-form-{question.id}")
+    _set_form_attr(option_form, f"question-detail-form-{question.id}")
+    return render(
+        request,
+        "adminui/survey_question_edit.html",
+        {
+            "condition_form": condition_form,
+            "question": question,
+            "question_form": question_form,
+            "option_form": option_form,
+            "survey": survey,
+        },
+    )
+
+
+@admin_required
+def survey_responses(request: HttpRequest, slug: str) -> HttpResponse:
+    survey = get_object_or_404(Survey, slug=slug)
+    response_matrix = _survey_response_matrix(survey)
+    return render(
+        request,
+        "adminui/survey_responses.html",
+        {
+            "response_rows": response_matrix["rows"],
+            "questions": response_matrix["questions"],
+            "survey": survey,
+        },
+    )
+
+
+@admin_required
+def survey_export(request: HttpRequest, slug: str) -> HttpResponse:
+    survey = get_object_or_404(Survey, slug=slug)
+    response_matrix = _survey_response_matrix(survey)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        ["Name", "Email"] + [question.name for question in response_matrix["questions"]],
+    )
+    for response_row in response_matrix["rows"]:
+        row = [response_row["name"], response_row["email"], *response_row["answers"]]
+        writer.writerow(row)
+    response = HttpResponse(output.getvalue(), content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{survey.slug}-responses.csv"'
+    return response
+
+
+def _survey_response_matrix(survey: Survey) -> dict[str, object]:
+    questions = list(survey.questions.order_by("display_order", "id"))
+    rows = []
+    for response in survey.responses.select_related("user").prefetch_related("answers"):
+        answers = {
+            answer.question_id: answer for answer in response.answers.all() if answer.question_id
+        }
+        rows.append(
+            {
+                "answers": [
+                    _survey_answer_display(answers.get(question.id)) for question in questions
+                ],
+                "email": response.user.email,
+                "name": response.user.get_full_name(),
+            }
+        )
+    return {"questions": questions, "rows": rows}
+
+
+def _survey_answer_display(answer: SurveyAnswer | None) -> str:
+    if answer is None:
+        return ""
+    return "; ".join(load_answer_json(answer.value))
+
+
+@admin_required
 def menus(request: HttpRequest) -> HttpResponse:
     Menu.objects.get_or_create(menu_name=Menu.ROOT_MENU_NAME)
     menu_form = MenuForm()
@@ -615,6 +920,83 @@ def _camp_year_section_url(camp_year: CampYear, section_id: str) -> str:
 
 def _menu_section_url(menu: Menu, section_id: str) -> str:
     return reverse("adminui:menu-edit", kwargs={"menu_name": menu.menu_name}) + f"#{section_id}"
+
+
+def _survey_section_url(survey: Survey, section_id: str) -> str:
+    return reverse("adminui:survey-edit", kwargs={"slug": survey.slug}) + f"#{section_id}"
+
+
+def _survey_question_section_url(
+    survey: Survey,
+    question: SurveyQuestion,
+    section_id: str,
+) -> str:
+    return (
+        reverse(
+            "adminui:survey-question-edit",
+            kwargs={"slug": survey.slug, "question_id": question.id},
+        )
+        + f"#{section_id}"
+    )
+
+
+def _set_form_attr(form, form_id: str) -> None:
+    for field in form.fields.values():
+        field.widget.attrs["form"] = form_id
+
+
+def _survey_question_cards(
+    survey: Survey,
+    bound_question_forms: dict[int, SurveyQuestionAdminForm] | None = None,
+    bound_option_forms: dict[int, SurveyQuestionOptionsForm] | None = None,
+    bound_choice_forms: dict[int, SurveyChoiceForm] | None = None,
+    bound_choice_create_forms: dict[int, SurveyChoiceCreateForm] | None = None,
+) -> list[dict[str, object]]:
+    bound_question_forms = bound_question_forms or {}
+    bound_option_forms = bound_option_forms or {}
+    bound_choice_forms = bound_choice_forms or {}
+    bound_choice_create_forms = bound_choice_create_forms or {}
+    cards = []
+    questions = list(survey.questions.prefetch_related("choices").order_by("display_order", "id"))
+    for index, question in enumerate(questions):
+        form_id = f"question-form-{question.id}"
+        question_form = bound_question_forms.get(
+            question.id,
+            SurveyQuestionAdminForm(instance=question),
+        )
+        option_form = bound_option_forms.get(
+            question.id,
+            SurveyQuestionOptionsForm(question=question),
+        )
+        _set_form_attr(question_form, form_id)
+        _set_form_attr(option_form, form_id)
+        choice_create_form = bound_choice_create_forms.get(
+            question.id,
+            SurveyChoiceCreateForm(question=question),
+        )
+        _set_form_attr(choice_create_form, form_id)
+        choices = []
+        for choice in question.choices.all():
+            choices.append(
+                {
+                    "choice": choice,
+                    "form": bound_choice_forms.get(choice.id, SurveyChoiceForm(instance=choice)),
+                }
+            )
+        cards.append(
+            {
+                "choice_create_form": choice_create_form,
+                "choices": choices,
+                "form_id": form_id,
+                "is_choice_based": is_choice_question_type(question.question_type),
+                "is_first": index == 0,
+                "is_last": index == len(questions) - 1,
+                "option_form": option_form,
+                "question": question,
+                "question_form": question_form,
+            }
+        )
+    return cards
 
 
 def _menus_with_item_summaries() -> list[Menu]:

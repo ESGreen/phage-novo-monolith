@@ -23,6 +23,7 @@ ADMIN_SECTIONS = [
     "/admin/payments/",
     "/admin/stripe/",
     "/admin/pages/",
+    "/admin/surveys/",
     "/admin/menus/",
     "/admin/media/",
 ]

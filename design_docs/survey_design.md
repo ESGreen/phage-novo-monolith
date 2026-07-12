@@ -98,10 +98,10 @@ The admin UI should follow existing admin patterns.
 | Route | Behavior |
 | --- | --- |
 | `/admin/surveys/` | Survey overview and create-survey card |
-| `/admin/survey/<slug>/` | Edit survey metadata, view and update questions, create questions, delete survey |
-| `/admin/survey/<slug>/<question_id>/` | Edit one question, configure conditions, delete question |
-| `/admin/survey/<slug>/responses/` | List responses |
-| `/admin/survey/<slug>/export.csv` | Download CSV export |
+| `/admin/surveys/<slug>/` | Edit survey metadata, view and update questions, create questions, delete survey |
+| `/admin/surveys/<slug>/<question_id>/` | Edit one question, configure conditions, delete question |
+| `/admin/surveys/<slug>/responses/` | View response table |
+| `/admin/surveys/<slug>/responses.csv` | Download response table as CSV |
 
 Admin UI rules:
 
@@ -126,14 +126,27 @@ Above the surveys table, show a checkbox labeled `Show active only`.
 - The checkbox is checked by default.
 - When checked, the table shows only active surveys.
 - When unchecked, the table shows all surveys.
+- Filtering should happen client-side from embedded JSON rather than through an Apply button and page reload.
+- The no-JavaScript fallback should render the active-surveys table.
 
 The surveys table is sorted by survey name and has one row per survey.
 
 Columns:
 
-- Name, rendered as a secondary edit button linking to `/admin/survey/<slug>/`.
+- Name, rendered as a secondary edit button linking to `/admin/surveys/<slug>/`.
 - Slug.
 - Active state.
+- Response count.
+- View Responses action, linking to `/admin/surveys/<slug>/responses/`.
+
+The embedded survey JSON should include:
+
+- `name`.
+- `slug`.
+- `is_active`.
+- `response_count`.
+- `edit_url`.
+- `responses_url`.
 
 The second card is `Create Survey`.
 
@@ -149,12 +162,12 @@ Create behavior:
 - New surveys are active by default.
 - `name` and `slug` must be unique.
 - `slug` must be valid for use in a URL path segment without escaping.
-- Successful creation redirects to `/admin/survey/<slug>/`.
+- Successful creation redirects to `/admin/surveys/<slug>/`.
 - Failed creation stays on `/admin/surveys/#create-survey`.
 
 ### Admin Survey Edit Page
 
-`/admin/survey/<slug>/` is the main survey edit page.
+`/admin/surveys/<slug>/` is the main survey edit page.
 
 The page contains these cards, in order:
 
@@ -184,7 +197,7 @@ The question type is not editable after creation. If the type is wrong, the admi
 Question card actions:
 
 - `Update` saves the current question card and redirects to that question fragment.
-- `Edit` saves the current question card and redirects to `/admin/survey/<slug>/<question_id>/`.
+- `Edit` saves the current question card and redirects to `/admin/surveys/<slug>/<question_id>/`.
 - Move up saves the current question card, moves the question up, and redirects to that question fragment.
 - Move down saves the current question card, moves the question down, and redirects to that question fragment.
 
@@ -198,8 +211,10 @@ Choice-based question types:
 Choice management includes:
 
 - A create-choice form above the choices table with `label` and `value` fields.
-- A choices table with `label`, `value`, and order controls.
-- A delete action for each choice. The exact UI placement can be decided during implementation.
+- The Create Choice button should sit to the right of the value field on non-mobile widths and stack below on mobile.
+- Creating a choice saves dirty question fields first. If the question update is invalid, the choice is not created.
+- A choices table with `label`, `value`, order controls, an inline Update Choice action, and a delete action for each choice.
+- The Update Choice button should sit to the right of the value field on non-mobile widths and stack below on mobile.
 - An `allows_other` checkbox below the choices table.
 - An `other_label` input associated with `allows_other`.
 
@@ -221,7 +236,7 @@ The `Delete Survey` danger card is protected:
 
 ### Admin Question Edit Page
 
-`/admin/survey/<slug>/<question_id>/` is the detail page for one question.
+`/admin/surveys/<slug>/<question_id>/` is the detail page for one question.
 
 The first card is the same question edit card used on the survey edit page, but without the `Edit` button. It still has `Update Question`.
 
@@ -260,13 +275,37 @@ Recommended fragments:
 
 Redirect behavior:
 
-- Updating survey details redirects to `/admin/survey/<new-slug>/#survey-details`.
-- Updating a question redirects to `/admin/survey/<slug>/#question-<question_id>`.
-- Moving a question redirects to `/admin/survey/<slug>/#question-<question_id>`.
-- Creating a question redirects to `/admin/survey/<slug>/#question-<new_question_id>`.
+- Updating survey details redirects to `/admin/surveys/<new-slug>/#survey-details`.
+- Updating a question redirects to `/admin/surveys/<slug>/#question-<question_id>`.
+- Moving a question redirects to `/admin/surveys/<slug>/#question-<question_id>`.
+- Creating a question redirects to `/admin/surveys/<slug>/#question-<new_question_id>`.
 - Creating, updating, deleting, or moving choices redirects to the parent question fragment.
-- Updating conditions redirects to `/admin/survey/<slug>/<question_id>/#conditional`.
-- Deleting a question redirects to `/admin/survey/<slug>/#create-question`.
+- Updating conditions redirects to `/admin/surveys/<slug>/<question_id>/#conditional`.
+- Deleting a question redirects to `/admin/surveys/<slug>/#create-question`.
+
+### Admin Response Review Page
+
+`/admin/surveys/<slug>/responses/` shows responses for one survey.
+
+The page should show a response table where each row is one `SurveyResponse`.
+
+Columns:
+
+- Name, combining the user's first and last name into one column.
+- Email.
+- One column per current survey question, ordered by `display_order`, then `id`.
+
+Answer rendering:
+
+- Decode `SurveyAnswer.value` JSON arrays for display.
+- Join multi-value answers with a readable delimiter such as `; `.
+- Leave the cell blank if no answer exists for that response/question.
+- Leave the cell blank for empty JSON arrays.
+- Do not include deleted questions in V1. Deleted-question answers remain snapshotted for historical data, but this response table only reports current questions.
+
+The page should include an `Export CSV` button at the bottom. The button downloads `/admin/surveys/<slug>/responses.csv`.
+
+The export should use the same rows and columns as the HTML table. If there are no responses, it should still export the header row.
 
 ## Data Model
 
@@ -668,21 +707,27 @@ Recommended V1 behavior:
 
 ## Exports
 
-V1 export can be CSV.
+V1 export is CSV from the response review page.
 
-Recommended export shape:
+Route:
+
+```text
+/admin/surveys/<slug>/responses.csv
+```
+
+Export shape:
 
 - One row per `SurveyResponse`.
+- Include one combined user name column.
 - Include user email.
-- Include user first name.
-- Include user last name.
-- Include response created timestamp.
-- Include response updated timestamp.
 - Include one column per current survey question.
 - Decode answer `value` JSON arrays for display.
 - Join multi-value answers with a readable delimiter such as `; `.
+- Leave empty or missing answers blank.
+- Exclude deleted questions for V1.
+- Export headers even when there are no responses.
 
-Snapshots are primarily for admin review and old-answer interpretation. The CSV can use current question order and current question names in V1.
+Snapshots are primarily for historical answer interpretation. The response table and CSV use current question order and current question names in V1.
 
 ## Dashboard And Payment Integration
 
@@ -787,15 +832,18 @@ Response and answer tests should cover:
 - The page appears in the admin navigation between Pages and Menus.
 - The admin home section list includes Surveys between Pages and Menus.
 - The `Show active only` checkbox is checked by default.
-- Active-only mode hides inactive surveys.
-- Unchecking active-only shows both active and inactive surveys.
+- Active-only mode hides inactive surveys in the no-JavaScript fallback.
+- Embedded survey JSON includes active and inactive surveys for client-side filtering.
+- Unchecking active-only shows both active and inactive surveys without a page reload.
 - Survey rows are sorted by name.
-- Each row shows an edit button, slug, and active state.
+- Each row shows an edit button, slug, active state, response count, and View Responses action.
+- Response counts match the number of `SurveyResponse` rows for each survey.
+- View Responses links to `/admin/surveys/<slug>/responses/`.
 - Empty state renders when there are no matching surveys.
 - Create Survey form includes name, slug, and a larger description field.
 - Create Survey form does not expose `is_active` because new surveys default active.
 - Creating a valid survey saves name, slug, description, and active default.
-- Creating a survey redirects to `/admin/survey/<slug>/`.
+- Creating a survey redirects to `/admin/surveys/<slug>/`.
 - Duplicate name is rejected.
 - Duplicate slug is rejected.
 - Invalid slug is rejected.
@@ -803,14 +851,14 @@ Response and answer tests should cover:
 
 ### Admin Survey Edit Tests
 
-`/admin/survey/<slug>/` tests should cover:
+`/admin/surveys/<slug>/` tests should cover:
 
 - Anonymous users are redirected to login.
 - Non-admin members receive `403`.
 - Unknown survey slug returns `404`.
 - Survey Details card renders name, slug, description, and active fields.
 - Updating survey details saves all fields.
-- Updating survey details after changing slug redirects to `/admin/survey/<new-slug>/#survey-details`.
+- Updating survey details after changing slug redirects to `/admin/surveys/<new-slug>/#survey-details`.
 - Duplicate survey name is rejected without changing the survey.
 - Duplicate survey slug is rejected without changing the survey.
 - Invalid survey slug is rejected without changing the survey.
@@ -819,7 +867,7 @@ Response and answer tests should cover:
 - Question cards do not render editable question type controls.
 - Render-hint choices are limited to hints valid for that question's type.
 - Updating a question saves dirty fields and redirects to `#question-<question_id>`.
-- Clicking Edit on a dirty question saves dirty fields and redirects to `/admin/survey/<slug>/<question_id>/`.
+- Clicking Edit on a dirty question saves dirty fields and redirects to `/admin/surveys/<slug>/<question_id>/`.
 - Moving a dirty question up saves dirty fields, updates order, and redirects to that question fragment.
 - Moving a dirty question down saves dirty fields, updates order, and redirects to that question fragment.
 - Moving the first question up is a no-op that does not corrupt ordering.
@@ -834,7 +882,8 @@ Choice management tests on the survey edit page should cover:
 - Text questions do not show choice management controls.
 - Single-choice questions show choice management controls.
 - Multi-choice questions show choice management controls.
-- Creating a choice saves label and value and redirects to the parent question fragment.
+- Creating a choice saves dirty question fields first, saves label and value, and redirects to the parent question fragment.
+- Invalid dirty question fields block choice creation and leave existing question data unchanged.
 - Creating a choice with blank value is accepted.
 - Choice rows render in display order.
 - Moving a choice up updates order and redirects to the parent question fragment.
@@ -856,7 +905,7 @@ Survey delete tests should cover:
 
 ### Admin Question Detail Tests
 
-`/admin/survey/<slug>/<question_id>/` tests should cover:
+`/admin/surveys/<slug>/<question_id>/` tests should cover:
 
 - Anonymous users are redirected to login.
 - Non-admin members receive `403`.
@@ -888,7 +937,7 @@ Question delete tests should cover:
 - Deleting a question removes conditions where that question is the dependent question.
 - Deleting a question removes conditions where that question is the controlling question.
 - Deleting a question with answers preserves those answers with null question references and snapshots.
-- Successful question delete redirects to `/admin/survey/<slug>/#create-question`.
+- Successful question delete redirects to `/admin/surveys/<slug>/#create-question`.
 
 ### Member Survey Page Tests
 
@@ -947,17 +996,35 @@ Submission tests should cover:
 
 ### Export And Response Review Tests
 
+Response review page tests should cover:
+
+- Anonymous users are redirected to login.
+- Non-admin members receive `403`.
+- Admin users can view `/admin/surveys/<slug>/responses/`.
+- Unknown survey slug returns `404`.
+- The table includes Name and Email columns.
+- The Name column combines first and last name.
+- The table includes one column per current survey question in current display order.
+- The table includes one row per survey response.
+- Text answers render as readable strings.
+- Multi-value answers render with the chosen delimiter.
+- Missing answers render as blank cells.
+- Empty JSON array answers render as blank cells.
+- Deleted questions do not appear as columns.
+- The Export CSV button appears at the bottom of the page.
+
 CSV export tests should cover:
 
 - Anonymous users are redirected to login.
 - Non-admin members receive `403`.
-- Admin users can export a survey.
-- Export headers include user email, first name, last name, response created timestamp, and response updated timestamp.
+- Admin users can export `/admin/surveys/<slug>/responses.csv`.
+- Export headers include Name and Email.
 - Export headers include current survey questions in current display order.
 - Text answers export as readable strings.
 - Multi-value answers export with the chosen delimiter.
 - Empty or hidden answers export as empty cells.
 - Deleted questions do not appear as current-question columns.
+- Export with no responses still returns the header row.
 - CSV values are escaped correctly for commas, quotes, and newlines.
 
 ### JavaScript Tests And Checks

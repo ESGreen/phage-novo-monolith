@@ -1,0 +1,88 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}{{ survey.name }} - The Phage{% endblock %}
+
+{% block content %}
+  <section class="content-card markdown-body">
+    <h1>{{ survey.name }}</h1>
+    {{ description_html }}
+  </section>
+
+  <form method="post" data-survey-form novalidate>
+    {% csrf_token %}
+    {% for card in question_cards %}
+      <section id="question-{{ card.question.id }}" class="content-card survey-question-card" data-survey-question-card data-question-id="{{ card.question.id }}" data-visible-if-question-id="{{ card.condition_parent_id }}" data-visible-if-choice-ids="{{ card.condition_choice_ids }}">
+        <h2>{{ card.question.name }}{% if card.question.is_required %} <span aria-label="required">*</span>{% endif %}</h2>
+        {% if card.description_html %}<div class="markdown-body">{{ card.description_html }}</div>{% endif %}
+        {% if card.errors %}
+          <ul class="errorlist">
+            {% for error in card.errors %}<li>{{ error }}</li>{% endfor %}
+          </ul>
+        {% endif %}
+
+        {% if card.is_text %}
+          <div class="form-row">
+            <label for="id_{{ card.field_name }}">Answer</label>
+            {% if card.is_long_text %}
+              <textarea id="id_{{ card.field_name }}" name="{{ card.field_name }}" rows="5">{{ card.text_value }}</textarea>
+            {% else %}
+              <input id="id_{{ card.field_name }}" type="{{ card.input_type }}" name="{{ card.field_name }}" value="{{ card.text_value }}">
+            {% endif %}
+          </div>
+        {% elif card.is_select %}
+          <div class="form-row">
+            <label for="id_{{ card.field_name }}">Answer</label>
+            <select id="id_{{ card.field_name }}" name="{{ card.field_name }}" data-choice-select data-question-id="{{ card.question.id }}">
+              <option value="">----</option>
+              {% for choice in card.question.choices.all %}
+                <option value="{{ choice.id }}" data-choice-id="{{ choice.id }}"{% if choice.id in card.selected_choice_ids %} selected{% endif %}>{{ choice.label }}</option>
+              {% endfor %}
+              {% if card.question.allows_other %}
+                <option value="{{ card.other_value_key }}"{% if card.other_selected %} selected{% endif %}>{{ card.question.other_label }}</option>
+              {% endif %}
+            </select>
+          </div>
+          {% if card.question.allows_other %}
+            <div class="form-row">
+              <label for="id_{{ card.other_name }}">{{ card.question.other_label }}</label>
+              <input id="id_{{ card.other_name }}" type="text" name="{{ card.other_name }}" value="{{ card.other_value }}" data-other-text>
+            </div>
+          {% endif %}
+        {% else %}
+          <fieldset class="compact-fieldset">
+            <legend>Answer</legend>
+            <div class="checkbox-list">
+              {% for choice in card.question.choices.all %}
+                <label>
+                  <input type="{% if card.is_multi_choice %}checkbox{% else %}radio{% endif %}" name="{{ card.field_name }}" value="{{ choice.id }}" data-choice-input data-question-id="{{ card.question.id }}" data-choice-id="{{ choice.id }}"{% if choice.id in card.selected_choice_ids %} checked{% endif %}>
+                  {{ choice.label }}
+                </label>
+              {% endfor %}
+              {% if card.question.allows_other %}
+                <label>
+                  <input type="{% if card.is_multi_choice %}checkbox{% else %}radio{% endif %}" name="{{ card.field_name }}" value="{{ card.other_value_key }}" data-other-checkbox{% if card.other_selected %} checked{% endif %}>
+                  {{ card.question.other_label }}
+                </label>
+              {% endif %}
+            </div>
+          </fieldset>
+          {% if card.question.allows_other %}
+            <div class="form-row">
+              <label for="id_{{ card.other_name }}">{{ card.question.other_label }}</label>
+              <input id="id_{{ card.other_name }}" type="text" name="{{ card.other_name }}" value="{{ card.other_value }}" data-other-text>
+            </div>
+          {% endif %}
+        {% endif %}
+      </section>
+    {% endfor %}
+
+    <section class="content-card narrow-card">
+      <button type="submit">Submit Survey</button>
+    </section>
+  </form>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/surveys.js' %}" defer></script>
+{% endblock %}
