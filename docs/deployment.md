@@ -21,6 +21,54 @@ Settled V1 choices:
 - Backups: external Python scripts scheduled by systemd timer.
 - S3 access: EC2 IAM role only, no AWS keys in TOML.
 
+## Overall Picture
+
+The production site is one Ubuntu host with three main services. Dynamic requests flow through Nginx to Gunicorn/Django:
+
+```text
+browser
+-> nginx.service
+-> /run/thephage/gunicorn.sock
+-> thephage.service running Gunicorn
+-> Django app in /opt/thephage/app
+```
+
+Django uses PostgreSQL on localhost for application data:
+
+```text
+thephage.service / Django
+-> postgresql.service on localhost
+```
+
+Nginx is the public web server. It serves `/public/`, `/static/`, and `/media/` directly from `/var/www/thephage`, and proxies dynamic application requests to Gunicorn over a Unix socket.
+
+Gunicorn is the Django application server. It is started by `thephage.service`, imports `thephage.wsgi:application`, reads `/etc/thephage/thephage.toml`, and runs the Django app from `/opt/thephage/app`.
+
+PostgreSQL is the database. It runs as the Ubuntu-managed `postgresql.service` on the same host and listens locally for Django connections.
+
+### PostgreSQL Callout
+
+- Started by: `postgresql.service` from the Ubuntu PostgreSQL package.
+- Hosts: the `thephage` database and `thephage` database user.
+- Used by: migrations, app requests, and backup scripts.
+- Check with: `systemctl status postgresql`.
+
+### Django App Callout
+
+- Started by: `thephage.service`.
+- Runs: Gunicorn with `thephage.wsgi:application`.
+- Uses: `/opt/thephage/app`, `/opt/thephage/venv`, and `/etc/thephage/thephage.toml`.
+- Listens on: `/run/thephage/gunicorn.sock`.
+- Check with: `systemctl status thephage.service` and `journalctl -u thephage.service`.
+
+### Nginx Callout
+
+- Started by: `nginx.service` from the Ubuntu Nginx package.
+- Serves directly: `/public/`, `/static/`, and `/media/`.
+- Proxies dynamic requests to `/run/thephage/gunicorn.sock`.
+- Handles TLS after certbot configures certificates.
+- Check with: `nginx -t` and `systemctl status nginx`.
+
 ## Important Paths
 
 Application paths:
@@ -132,6 +180,15 @@ sudo -u phage /opt/thephage/venv/bin/pip install /opt/thephage/app
 
 PostgreSQL runs on the same EC2 instance in V1.
 
+It is managed by Ubuntu's `postgresql.service`; Django does not start the database.
+
+Enable and start PostgreSQL:
+
+```bash
+sudo systemctl enable --now postgresql
+systemctl status postgresql
+```
+
 Database settings:
 
 ```text
@@ -182,6 +239,8 @@ The real config file does not contain AWS access keys in V1.
 
 ## systemd App Service
 
+The Django app is served by Gunicorn. `thephage.service` starts Gunicorn, and Gunicorn loads `thephage.wsgi:application` from `/opt/thephage/app`.
+
 Service path:
 
 ```text
@@ -219,13 +278,21 @@ Useful commands:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable thephage.service
-sudo systemctl start thephage.service
+sudo systemctl enable --now thephage.service
 sudo systemctl status thephage.service
 journalctl -u thephage.service
 ```
 
 ## Nginx
+
+Nginx is the public web server and reverse proxy. It serves public/static/media files directly and proxies Django requests to Gunicorn.
+
+Enable and start Nginx:
+
+```bash
+sudo systemctl enable --now nginx
+systemctl status nginx
+```
 
 Nginx site config path:
 
@@ -548,7 +615,7 @@ High-level deployment sequence:
 2. Attach IAM role `thephage-web-role`.
 3. Install Ubuntu packages.
 4. Create `phage` user/group and directories.
-5. Create PostgreSQL user/database.
+5. Enable PostgreSQL and create the PostgreSQL user/database.
 6. Copy `/etc/thephage/thephage.toml` from `deploy/thephage.toml.example` and fill secrets.
 7. Deploy code to `/opt/thephage/app`.
 8. Create/update virtualenv and install dependencies.
@@ -560,7 +627,7 @@ High-level deployment sequence:
 14. Install/update `thephage.service`.
 15. Install/update Nginx site config.
 16. Start/restart the app service.
-17. Reload Nginx.
+17. Enable/reload Nginx.
 18. Run certbot for TLS if this is the first deployment.
 19. Install/update backup scripts and timer.
 20. Run deployment verification checks.
