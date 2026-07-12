@@ -6,6 +6,7 @@ from io import BytesIO
 import pytest
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from PIL import Image
 
@@ -13,6 +14,7 @@ from camp.models import CampYear, TaxAddOn, TaxOverride, TaxTier
 from content.models import ContentPage, MediaItem, Menu, MenuItem
 from core.models import SiteSettings
 from payments.models import Payment, PaymentLog
+from surveys.models import Survey
 
 pytestmark = pytest.mark.django_db
 
@@ -515,7 +517,7 @@ def test_admin_can_create_camp_year(client) -> None:
     )
 
     assert response.status_code == 302
-    assert response["Location"] == "/admin/camp/2026/#dashboard-pages"
+    assert response["Location"] == "/admin/camp/2026/#dashboard-setup"
     camp_year = CampYear.objects.get(year=2026)
     assert camp_year.created_by == admin
     assert camp_year.updated_by == admin
@@ -611,11 +613,13 @@ def test_admin_camp_year_edit_page_loads_year_scoped_sections(client) -> None:
 
     assert response.status_code == 200
     assert "Edit Camp Year: 2026" in body
-    assert "Dashboard Pages" in body
+    assert "Dashboard Setup" in body
+    assert "Camp survey" in body
+    assert "The selected survey is required before members can pay taxes." in body
     assert "Tax Tiers" in body
     assert "Tax Add-ons" in body
     assert "Tax Overrides" in body
-    assert 'id="dashboard-pages"' in body
+    assert 'id="dashboard-setup"' in body
     assert 'id="tax-tiers"' in body
     assert 'id="tax-add-ons"' in body
     assert 'id="tax-overrides"' in body
@@ -633,28 +637,39 @@ def test_admin_camp_year_edit_page_loads_year_scoped_sections(client) -> None:
     assert 'type="datetime-local"' not in body
 
 
-def test_admin_can_update_camp_year_dashboard_pages(client) -> None:
+def test_admin_can_update_camp_year_dashboard_setup(client) -> None:
     admin = create_user(email="admin@example.com", is_admin=True)
     pre_page = ContentPage.objects.create(title="Pre", slug="pre", body_markdown="Pre")
     post_page = ContentPage.objects.create(title="Post", slug="post", body_markdown="Post")
+    survey = Survey.objects.create(name="Camp Survey", slug="camp-survey")
     camp_year = CampYear.objects.create(year=2026)
     client.force_login(admin)
 
     response = client.post(
         "/admin/camp/2026/",
         {
-            "action": "pages",
+            "action": "dashboard_setup",
             "dashboard_pre_page": str(pre_page.id),
             "dashboard_post_page": str(post_page.id),
+            "camp_survey": str(survey.id),
         },
     )
 
     assert response.status_code == 302
-    assert response["Location"] == "/admin/camp/2026/#dashboard-pages"
+    assert response["Location"] == "/admin/camp/2026/#dashboard-setup"
     camp_year.refresh_from_db()
     assert camp_year.dashboard_pre_page == pre_page
     assert camp_year.dashboard_post_page == post_page
+    assert camp_year.camp_survey == survey
     assert camp_year.updated_by == admin
+
+
+def test_configured_camp_survey_is_protected_from_delete(client) -> None:
+    survey = Survey.objects.create(name="Camp Survey", slug="camp-survey")
+    CampYear.objects.create(year=2026, camp_survey=survey)
+
+    with pytest.raises(ProtectedError):
+        survey.delete()
 
 
 def test_admin_can_create_year_scoped_tax_tier_with_dollar_amount(client) -> None:

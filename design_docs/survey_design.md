@@ -87,7 +87,9 @@ Submitting the survey:
 
 - Creates a response if the member has not answered before.
 - Updates the existing response if one already exists.
-- Redirects to `/survey/<slug>/complete/` after a successful POST.
+- Redirects after a successful POST.
+- If `redirect_after_submission_url` is blank, redirects to `/survey/<slug>/complete/`.
+- If `redirect_after_submission_url` is set, redirects to that internal path.
 
 `/survey/<slug>/complete/` is the completion page for now. It can be simple and should link back to the survey while the survey remains active.
 
@@ -182,6 +184,13 @@ The `Survey Details` card allows editing:
 - `slug`.
 - `description_markdown`.
 - `is_active`.
+- `redirect_after_submission_url`.
+
+`redirect_after_submission_url` should appear after the active checkbox under a heading such as `Redirect after submission`.
+
+Help text should explain that leaving it blank sends members to `/survey/<slug>/complete/` after a successful submission.
+
+The redirect must be an internal path for V1. Accept values such as `/2026/dashboard/`; reject external URLs such as `https://example.com`, protocol-relative URLs such as `//example.com`, and unsafe schemes.
 
 It ends with an `Update Survey` button.
 
@@ -318,6 +327,7 @@ The export should use the same rows and columns as the HTML table. If there are 
 | `name` | string, unique | Human-readable title |
 | `description_markdown` | text | Rendered with existing sanitized Markdown renderer |
 | `is_active` | boolean, default true | Members can submit/edit when true |
+| `redirect_after_submission_url` | string, blank | Optional internal path used after successful submission |
 | `created_at` | datetime | Auto-created |
 | `updated_at` | datetime | Auto-updated |
 
@@ -735,7 +745,31 @@ Surveys are generic in V1.
 
 The survey app should not require a `CampYear` FK. A year-specific survey can use a slug like `2026-arrival-survey`.
 
-Future dashboard integration can add a separate requirement/configuration model that points a camp year to a survey. That future model can decide whether survey completion gates taxes.
+`CampYear` may point to one optional camp survey through a `camp_survey` FK to `Survey`.
+
+The camp admin UI should include this field in the first camp-year card, renamed from `Dashboard Pages` to `Dashboard Setup`. The field label should be `Camp survey`.
+
+Help text should explain that the selected survey is required before members can pay taxes.
+
+The registration checklist remains hardcoded in V1:
+
+- Profile.
+- Camp Survey, only when `camp_year.camp_survey` is set.
+- Taxes.
+
+Camp survey completion means the user has a `SurveyResponse` for `camp_year.camp_survey`.
+
+If the configured camp survey is active and incomplete, the dashboard action links to `/survey/<slug>/`.
+
+If the configured camp survey is inactive and the user has no response, the dashboard should show the step as incomplete/unavailable with no action, and taxes remain locked.
+
+If the configured camp survey is inactive but the user already has a response, the dashboard should mark the survey step complete.
+
+Direct access to `/year/taxes/` must be blocked until checklist prerequisites up to the Taxes step are complete. This prevents bypassing Profile or Camp Survey completion by going directly to the taxes URL or posting directly to checkout.
+
+The selected camp survey can set `redirect_after_submission_url` to the camp dashboard, such as `/2026/dashboard/`, so members return to the checklist after submitting.
+
+A generic requirement engine is out of V1 scope. Future jobs can be added as another hardcoded optional checklist step first; only introduce a generic requirement table if admins need arbitrary ordering or many requirement types.
 
 Do not store survey completion state on the user account or member profile.
 
@@ -771,6 +805,9 @@ Survey tests should cover:
 - `Survey.name` is unique.
 - `Survey.slug` is unique.
 - Invalid slugs with spaces or unsafe URL characters are rejected.
+- Blank `redirect_after_submission_url` is accepted.
+- Internal `redirect_after_submission_url` values are accepted.
+- External, protocol-relative, and unsafe redirect URLs are rejected.
 - Surveys sort by `name` then `slug`.
 
 Question tests should cover:
@@ -857,7 +894,10 @@ Response and answer tests should cover:
 - Non-admin members receive `403`.
 - Unknown survey slug returns `404`.
 - Survey Details card renders name, slug, description, and active fields.
+- Survey Details card renders redirect-after-submission field and fallback help text.
 - Updating survey details saves all fields.
+- Updating survey details saves redirect-after-submission URL.
+- Updating survey details rejects unsafe redirect-after-submission URLs.
 - Updating survey details after changing slug redirects to `/admin/surveys/<new-slug>/#survey-details`.
 - Duplicate survey name is rejected without changing the survey.
 - Duplicate survey slug is rejected without changing the survey.
@@ -939,6 +979,22 @@ Question delete tests should cover:
 - Deleting a question with answers preserves those answers with null question references and snapshots.
 - Successful question delete redirects to `/admin/surveys/<slug>/#create-question`.
 
+Camp survey integration tests should cover:
+
+- Camp year admin `Dashboard Setup` renders dashboard pages and Camp survey selector in the same card.
+- Updating Dashboard Setup saves pre-page, post-page, and camp survey together.
+- Camp overview summarizes the selected camp survey.
+- Camp survey selection protects the selected survey from deletion.
+- Dashboard without a camp survey keeps the Profile and Taxes checklist behavior.
+- Dashboard with an incomplete active camp survey shows Survey between Profile and Taxes.
+- Incomplete active camp survey links to `/survey/<slug>/` when it is the current step.
+- Completed camp survey is marked complete when the user has a response.
+- Inactive incomplete camp survey shows as unavailable and keeps Taxes locked.
+- Inactive completed camp survey remains complete.
+- Direct `/year/taxes/` access redirects or blocks when Profile is incomplete.
+- Direct `/year/taxes/` access redirects or blocks when configured camp survey is incomplete.
+- Direct `/year/taxes/` access works after Profile and configured camp survey are complete.
+
 ### Member Survey Page Tests
 
 `/survey/<slug>/` tests should cover:
@@ -967,7 +1023,8 @@ Submission tests should cover:
 
 - Posting a valid first response creates one response and answer rows.
 - Posting again updates the existing response rather than creating a second response.
-- Successful POST redirects to `/survey/<slug>/complete/`.
+- Successful POST redirects to `/survey/<slug>/complete/` when no custom redirect is configured.
+- Successful POST redirects to the configured internal `redirect_after_submission_url` when set.
 - The completion page loads for the logged-in user.
 - The completion page links back to the survey while the survey is active.
 - Inactive surveys reject POST without changing existing answers.

@@ -151,6 +151,7 @@ def test_survey_edit_updates_details_and_rejects_duplicate_slug(client) -> None:
             "slug": "updated-survey",
             "description_markdown": "Updated body",
             "is_active": "on",
+            "redirect_after_submission_url": "/2026/dashboard/",
         },
     )
 
@@ -158,6 +159,7 @@ def test_survey_edit_updates_details_and_rejects_duplicate_slug(client) -> None:
     assert response["Location"] == "/admin/surveys/updated-survey/#survey-details"
     survey.refresh_from_db()
     assert survey.name == "Updated"
+    assert survey.redirect_after_submission_url == "/2026/dashboard/"
 
     response = client.post(
         "/admin/surveys/updated-survey/",
@@ -167,10 +169,25 @@ def test_survey_edit_updates_details_and_rejects_duplicate_slug(client) -> None:
             "slug": "other",
             "description_markdown": "Updated body",
             "is_active": "on",
+            "redirect_after_submission_url": "/2026/dashboard/",
         },
     )
     assert response.status_code == 200
     assert b"Survey with this Slug already exists." in response.content
+
+    response = client.post(
+        "/admin/surveys/updated-survey/",
+        {
+            "action": "update_survey",
+            "name": "Updated",
+            "slug": "updated-survey",
+            "description_markdown": "Updated body",
+            "is_active": "on",
+            "redirect_after_submission_url": "https://example.com",
+        },
+    )
+    assert response.status_code == 200
+    assert b"Enter an internal path starting with /." in response.content
 
 
 def test_admin_can_create_questions_with_default_hints_and_question_cards(client) -> None:
@@ -194,6 +211,8 @@ def test_admin_can_create_questions_with_default_hints_and_question_cards(client
 
     response = client.get("/admin/surveys/arrival-survey/")
     body = response.content.decode()
+    assert "Redirect after submission" in body
+    assert "Leave blank to show /survey/arrival-survey/complete/ after submission." in body
     assert "Question: text" in body
     assert "Create Choice" in body
     assert survey.questions.count() == 3

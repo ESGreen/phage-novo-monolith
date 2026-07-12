@@ -14,6 +14,7 @@ from payments.checkout import (
     get_unexpired_created_payment,
 )
 from payments.models import Payment
+from surveys.models import SurveyResponse
 
 from .forms import TaxSelectionForm
 from .models import CampYear
@@ -38,7 +39,11 @@ def year_redirect(request: HttpRequest, year: int) -> HttpResponseRedirect:
 @member_required
 def dashboard(request: HttpRequest, year: int) -> HttpResponse:
     camp_year = get_object_or_404(
-        CampYear.objects.select_related("dashboard_pre_page", "dashboard_post_page"),
+        CampYear.objects.select_related(
+            "camp_survey",
+            "dashboard_pre_page",
+            "dashboard_post_page",
+        ),
         year=year,
     )
     pre_html = ""
@@ -66,6 +71,7 @@ def _dashboard_items(user: object, camp_year: CampYear) -> list[dict[str, object
     profile = user.profile
     profile_complete = bool(profile.photo_id and profile.bio_markdown.strip())
     taxes_complete = get_paid_payment(user, camp_year) is not None or is_tax_waived(user, camp_year)
+    survey_complete = _camp_survey_complete(user, camp_year)
     items = [
         {
             "key": "profile",
@@ -80,6 +86,27 @@ def _dashboard_items(user: object, camp_year: CampYear) -> list[dict[str, object
             "complete_action_label": "Edit Profile",
             "action_url": reverse("accounts:profile"),
         },
+    ]
+    if camp_year.camp_survey_id:
+        survey = camp_year.camp_survey
+        survey_available = survey.is_active or survey_complete
+        items.append(
+            {
+                "key": "camp_survey",
+                "title": "Camp Survey",
+                "complete": survey_complete,
+                "complete_description": "Camp survey complete.",
+                "incomplete_description": (
+                    "Complete the camp survey before paying taxes."
+                    if survey_available
+                    else "The camp survey is not currently available. Contact an admin."
+                ),
+                "current_action_label": "Complete Survey" if survey_available else "",
+                "complete_action_label": "Edit Survey" if survey.is_active else "",
+                "action_url": survey.get_absolute_url() if survey_available else "",
+            }
+        )
+    items.append(
         {
             "key": "taxes",
             "title": "Taxes",
@@ -90,7 +117,7 @@ def _dashboard_items(user: object, camp_year: CampYear) -> list[dict[str, object
             "complete_action_label": "",
             "action_url": reverse("camp:taxes", kwargs={"year": camp_year.year}),
         },
-    ]
+    )
     current_assigned = False
     for item in items:
         if item["complete"]:
@@ -115,9 +142,26 @@ def _dashboard_items(user: object, camp_year: CampYear) -> list[dict[str, object
     return items
 
 
+def _camp_survey_complete(user: object, camp_year: CampYear) -> bool:
+    if not camp_year.camp_survey_id:
+        return True
+    return SurveyResponse.objects.filter(survey=camp_year.camp_survey, user=user).exists()
+
+
+def _tax_prerequisites_complete(user: object, camp_year: CampYear) -> bool:
+    profile = user.profile
+    return bool(profile.photo_id and profile.bio_markdown.strip()) and _camp_survey_complete(
+        user,
+        camp_year,
+    )
+
+
 @member_required
 def taxes(request: HttpRequest, year: int) -> HttpResponse:
-    camp_year = get_object_or_404(CampYear, year=year)
+    camp_year = get_object_or_404(CampYear.objects.select_related("camp_survey"), year=year)
+    if not _tax_prerequisites_complete(request.user, camp_year):
+        messages.error(request, "Complete your registration checklist before paying taxes.")
+        return redirect("camp:dashboard", year=camp_year.year)
     tax_override = get_tax_override(request.user, camp_year)
     paid_payment = get_paid_payment(request.user, camp_year)
     blocking_payment = get_unexpired_created_payment(request.user, camp_year)

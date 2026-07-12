@@ -11,11 +11,22 @@ from .services import replace_conditions, validate_condition_update
 class SurveyAdminForm(forms.ModelForm):
     class Meta:
         model = Survey
-        fields = ["name", "slug", "description_markdown", "is_active"]
+        fields = [
+            "name",
+            "slug",
+            "description_markdown",
+            "is_active",
+            "redirect_after_submission_url",
+        ]
         widgets = {"description_markdown": forms.Textarea(attrs={"rows": 8})}
 
     def clean_slug(self) -> str:
         return self.cleaned_data["slug"].lower()
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        if "redirect_after_submission_url" in self.fields:
+            self.fields["redirect_after_submission_url"].label = "Redirect after submission"
 
 
 class SurveyCreateForm(SurveyAdminForm):

@@ -96,6 +96,19 @@ def test_invalid_slug_is_rejected_by_full_clean() -> None:
         survey.full_clean()
 
 
+def test_redirect_after_submission_must_be_internal_path() -> None:
+    Survey(name="Blank", slug="blank", redirect_after_submission_url="").full_clean()
+    Survey(
+        name="Internal",
+        slug="internal",
+        redirect_after_submission_url="/2026/dashboard/",
+    ).full_clean()
+
+    for url in ["https://example.com", "//example.com", "javascript:alert(1)"]:
+        with pytest.raises(ValidationError):
+            Survey(name="Bad", slug="bad", redirect_after_submission_url=url).full_clean()
+
+
 def test_question_render_hint_matrix_is_validated() -> None:
     survey = create_survey()
     question = create_question(

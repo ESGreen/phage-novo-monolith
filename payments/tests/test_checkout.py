@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from camp.models import CampYear, TaxAddOn, TaxOverride, TaxTier
+from content.models import MediaItem
 from payments.models import Payment, PaymentAddOn
 
 pytestmark = pytest.mark.django_db
@@ -18,6 +19,19 @@ def create_user(email: str = "member@example.com"):
 
 def create_camp_year(year: int = 2026) -> CampYear:
     return CampYear.objects.create(year=year)
+
+
+def complete_profile(user) -> None:
+    photo = MediaItem.objects.create(
+        title="Profile photo",
+        original_filename="profile.png",
+        file_path=f"profile-{user.id}.png",
+        content_type="image/png",
+        size_bytes=1,
+    )
+    user.profile.photo = photo
+    user.profile.bio_markdown = "Ready for camp."
+    user.profile.save(update_fields=["photo", "bio_markdown", "updated_at"])
 
 
 def create_tax_tier(camp_year: CampYear, name: str = "Standard", minimum: int = 10000) -> TaxTier:
@@ -77,6 +91,7 @@ def create_payment(
 
 def test_checkout_creates_payment_and_redirects_to_stripe(client, mocker) -> None:
     user = create_user()
+    complete_profile(user)
     client.force_login(user)
     camp_year = create_camp_year()
     tier = create_tax_tier(camp_year, name="Sustainer", minimum=10000)
@@ -123,6 +138,7 @@ def test_checkout_creates_payment_and_redirects_to_stripe(client, mocker) -> Non
 
 def test_checkout_is_blocked_when_already_paid(client, mocker) -> None:
     user = create_user()
+    complete_profile(user)
     client.force_login(user)
     camp_year = create_camp_year()
     tier = create_tax_tier(camp_year)
@@ -142,6 +158,7 @@ def test_checkout_is_blocked_when_already_paid(client, mocker) -> None:
 
 def test_checkout_is_blocked_by_unexpired_created_payment(client, mocker) -> None:
     user = create_user()
+    complete_profile(user)
     client.force_login(user)
     camp_year = create_camp_year()
     tier = create_tax_tier(camp_year)
@@ -161,6 +178,7 @@ def test_checkout_is_blocked_by_unexpired_created_payment(client, mocker) -> Non
 
 def test_checkout_allows_new_attempt_when_created_payment_expired(client, mocker) -> None:
     user = create_user()
+    complete_profile(user)
     client.force_login(user)
     camp_year = create_camp_year()
     tier = create_tax_tier(camp_year)
@@ -179,6 +197,7 @@ def test_checkout_allows_new_attempt_when_created_payment_expired(client, mocker
 
 def test_checkout_allows_waived_taxes_with_add_ons(client, mocker) -> None:
     user = create_user()
+    complete_profile(user)
     client.force_login(user)
     camp_year = create_camp_year()
     create_tax_tier(camp_year)

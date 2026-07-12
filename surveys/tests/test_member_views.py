@@ -161,6 +161,20 @@ def test_submit_creates_response_then_resubmits_existing_response(client) -> Non
     assert json.loads(SurveyAnswer.objects.get().value) == ["Bob"]
 
 
+def test_submit_redirects_to_configured_internal_url(client) -> None:
+    user = create_user()
+    survey = create_survey()
+    survey.redirect_after_submission_url = "/2026/dashboard/"
+    survey.save(update_fields=["redirect_after_submission_url", "updated_at"])
+    question = create_question(survey, "Name")
+    client.force_login(user)
+
+    response = client.post("/survey/arrival-survey/", {f"question_{question.id}": "Alice"})
+
+    assert response.status_code == 302
+    assert response["Location"] == "/2026/dashboard/"
+
+
 def test_completion_page_loads_and_links_back(client) -> None:
     user = create_user()
     create_survey()

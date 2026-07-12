@@ -92,12 +92,12 @@ Camp year edit URL:
 
 The camp year edit page contains:
 
-- Dashboard Pages.
+- Dashboard Setup.
 - Tax Tiers.
 - Tax Add-ons.
 - Tax Overrides.
 
-Dashboard Pages selects the pre-checklist and post-checklist content pages used on the member dashboard.
+Dashboard Setup selects the pre-checklist and post-checklist content pages used on the member dashboard. It also selects the optional Camp survey. If a Camp survey is selected, members must complete that survey before they can pay taxes.
 
 Tax tiers and tax add-ons are created on the camp year edit page. Amounts are entered in dollars. Start and end values are date-only inputs and are saved internally as local-midnight datetimes.
 
@@ -156,6 +156,8 @@ Survey edit URL:
 ```
 
 The survey edit page manages survey details, question order, question updates, choice creation/editing/reordering/deletion, add-question workflow, and protected survey deletion.
+
+Survey details include an optional Redirect after submission URL. Leave it blank to use `/survey/<slug>/complete/`. Use an internal path such as `/2026/dashboard/` when a camp survey should return members to the dashboard after submission.
 
 The surveys overview also shows response counts and a View Responses action.
 

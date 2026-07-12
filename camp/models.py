@@ -22,6 +22,13 @@ class CampYear(models.Model):
         null=True,
         related_name="camp_years_as_dashboard_post_page",
     )
+    camp_survey = models.ForeignKey(
+        "surveys.Survey",
+        on_delete=models.PROTECT,
+        blank=True,
+        null=True,
+        related_name="camp_years_as_camp_survey",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

@@ -159,6 +159,9 @@ def _local_date(value: datetime):
 def _set_blank_page_labels(form: forms.Form) -> None:
     form.fields["dashboard_pre_page"].empty_label = "----"
     form.fields["dashboard_post_page"].empty_label = "----"
+    if "camp_survey" in form.fields:
+        form.fields["camp_survey"].empty_label = "----"
+        form.fields["camp_survey"].label = "Camp survey"
 
 
 def _named_users():
@@ -216,10 +219,10 @@ class CampYearCreateForm(forms.ModelForm):
         _set_blank_page_labels(self)
 
 
-class CampYearPagesForm(forms.ModelForm):
+class CampYearDashboardSetupForm(forms.ModelForm):
     class Meta:
         model = CampYear
-        fields = ["dashboard_pre_page", "dashboard_post_page"]
+        fields = ["dashboard_pre_page", "dashboard_post_page", "camp_survey"]
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from accounts.permissions import member_required
 from content.markdown import render_markdown
@@ -31,7 +32,7 @@ def survey_detail(request: HttpRequest, slug: str) -> HttpResponse:
     if request.method == "POST":
         result = submit_survey_response(survey, request.user, request.POST)
         if result.success:
-            return redirect("surveys:survey-complete", slug=survey.slug)
+            return redirect(_survey_success_url(survey))
         errors = result.errors
 
     response = SurveyResponse.objects.filter(survey=survey, user=request.user).first()
@@ -105,6 +106,13 @@ def _question_cards(
             }
         )
     return cards
+
+
+def _survey_success_url(survey: Survey) -> str:
+    return survey.redirect_after_submission_url or reverse(
+        "surveys:survey-complete",
+        kwargs={"slug": survey.slug},
+    )
 
 
 def _input_type(render_hint: str) -> str:

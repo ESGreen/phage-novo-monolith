@@ -20,6 +20,7 @@ class Survey(models.Model):
     slug = models.SlugField(unique=True)
     description_markdown = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    redirect_after_submission_url = models.CharField(max_length=500, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -31,6 +32,18 @@ class Survey(models.Model):
 
     def get_absolute_url(self) -> str:
         return reverse("surveys:survey-detail", kwargs={"slug": self.slug})
+
+    def clean(self) -> None:
+        if self.redirect_after_submission_url and not _is_internal_path(
+            self.redirect_after_submission_url,
+        ):
+            raise ValidationError(
+                {"redirect_after_submission_url": "Enter an internal path starting with /."},
+            )
+
+
+def _is_internal_path(value: str) -> bool:
+    return value.startswith("/") and not value.startswith("//")
 
 
 class SurveyQuestion(models.Model):

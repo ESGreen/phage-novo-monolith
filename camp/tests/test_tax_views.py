@@ -7,6 +7,8 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from camp.models import CampYear, TaxAddOn, TaxOverride, TaxTier
+from content.models import MediaItem
+from surveys.models import Survey, SurveyResponse
 
 pytestmark = pytest.mark.django_db
 
@@ -17,6 +19,23 @@ def create_user(email: str = "member@example.com"):
 
 def create_camp_year(year: int = 2026) -> CampYear:
     return CampYear.objects.create(year=year)
+
+
+def complete_profile(user) -> None:
+    photo = MediaItem.objects.create(
+        title="Profile photo",
+        original_filename="profile.png",
+        file_path=f"profile-{user.id}.png",
+        content_type="image/png",
+        size_bytes=1,
+    )
+    user.profile.photo = photo
+    user.profile.bio_markdown = "Ready for camp."
+    user.profile.save(update_fields=["photo", "bio_markdown", "updated_at"])
+
+
+def create_camp_survey(active: bool = True) -> Survey:
+    return Survey.objects.create(name="Camp Survey", slug="camp-survey", is_active=active)
 
 
 def create_tax_tier(camp_year: CampYear, name: str = "Standard", minimum: int = 10000) -> TaxTier:
@@ -61,6 +80,7 @@ def test_unknown_tax_year_returns_404(client) -> None:
 
 def test_taxes_page_shows_unavailable_when_no_tiers(client) -> None:
     user = create_user()
+    complete_profile(user)
     client.force_login(user)
     create_camp_year()
 
@@ -73,6 +93,7 @@ def test_taxes_page_shows_unavailable_when_no_tiers(client) -> None:
 
 def test_taxes_page_shows_multiple_available_tiers_and_add_ons(client) -> None:
     user = create_user()
+    complete_profile(user)
     client.force_login(user)
     camp_year = create_camp_year()
     budget = create_tax_tier(camp_year, name="Budget", minimum=5000)
@@ -104,6 +125,7 @@ def test_taxes_page_shows_multiple_available_tiers_and_add_ons(client) -> None:
 
 def test_reduced_minimum_override_is_shown_and_honored(client, mocker) -> None:
     user = create_user()
+    complete_profile(user)
     client.force_login(user)
     camp_year = create_camp_year()
     create_tax_tier(camp_year, name="Standard", minimum=10000)
@@ -136,6 +158,7 @@ def test_reduced_minimum_override_is_shown_and_honored(client, mocker) -> None:
 
 def test_tax_waived_override_shows_zero_tier_and_add_ons(client) -> None:
     user = create_user()
+    complete_profile(user)
     client.force_login(user)
     camp_year = create_camp_year()
     create_tax_tier(camp_year)
@@ -159,6 +182,7 @@ def test_tax_waived_override_shows_zero_tier_and_add_ons(client) -> None:
 
 def test_tax_page_rejects_below_minimum_amount(client) -> None:
     user = create_user()
+    complete_profile(user)
     client.force_login(user)
     camp_year = create_camp_year()
     tier = create_tax_tier(camp_year, minimum=10000)
@@ -170,6 +194,47 @@ def test_tax_page_rejects_below_minimum_amount(client) -> None:
 
     assert response.status_code == 200
     assert b"Enter at least $100.00." in response.content
+
+
+def test_taxes_page_redirects_to_dashboard_when_profile_is_incomplete(client) -> None:
+    user = create_user()
+    client.force_login(user)
+    camp_year = create_camp_year()
+    create_tax_tier(camp_year)
+
+    response = client.get("/2026/taxes/")
+
+    assert response.status_code == 302
+    assert response["Location"] == "/2026/dashboard/"
+
+
+def test_taxes_page_redirects_to_dashboard_when_camp_survey_is_incomplete(client) -> None:
+    user = create_user()
+    complete_profile(user)
+    client.force_login(user)
+    survey = create_camp_survey()
+    camp_year = CampYear.objects.create(year=2026, camp_survey=survey)
+    create_tax_tier(camp_year)
+
+    response = client.get("/2026/taxes/")
+
+    assert response.status_code == 302
+    assert response["Location"] == "/2026/dashboard/"
+
+
+def test_taxes_page_loads_when_camp_survey_is_complete(client) -> None:
+    user = create_user()
+    complete_profile(user)
+    client.force_login(user)
+    survey = create_camp_survey()
+    camp_year = CampYear.objects.create(year=2026, camp_survey=survey)
+    SurveyResponse.objects.create(user=user, survey=survey)
+    create_tax_tier(camp_year)
+
+    response = client.get("/2026/taxes/")
+
+    assert response.status_code == 200
+    assert b"Start Checkout" in response.content
 
 
 def test_dashboard_shows_waived_tax_status(client) -> None:

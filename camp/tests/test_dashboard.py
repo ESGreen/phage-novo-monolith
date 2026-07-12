@@ -8,6 +8,7 @@ from camp.models import CampYear, TaxOverride
 from camp.services import get_current_camp_year
 from content.models import ContentPage, MediaItem
 from payments.models import Payment
+from surveys.models import Survey, SurveyResponse
 
 pytestmark = pytest.mark.django_db
 
@@ -33,6 +34,14 @@ def complete_profile(user) -> None:
     user.profile.photo = create_profile_photo(user)
     user.profile.bio_markdown = "Ready for camp."
     user.profile.save(update_fields=["photo", "bio_markdown", "updated_at"])
+
+
+def create_camp_survey(active: bool = True) -> Survey:
+    return Survey.objects.create(name="Camp Survey", slug="camp-survey", is_active=active)
+
+
+def mark_camp_survey_complete(user, survey: Survey) -> None:
+    SurveyResponse.objects.create(user=user, survey=survey)
 
 
 def mark_taxes_paid(user, camp_year: CampYear) -> None:
@@ -205,6 +214,74 @@ def test_dashboard_makes_taxes_current_after_profile_is_complete(client) -> None
     assert b"Please pay your camp taxes" in response.content
     assert b"Pay Taxes" in response.content
     assert b'href="/2026/taxes/"' in response.content
+
+
+def test_dashboard_requires_active_camp_survey_before_taxes_are_current(client) -> None:
+    user = create_user()
+    complete_profile(user)
+    survey = create_camp_survey()
+    CampYear.objects.create(year=2026, camp_survey=survey)
+    client.force_login(user)
+
+    response = client.get("/2026/dashboard/")
+
+    assert response.status_code == 200
+    assert b"Camp Survey" in response.content
+    assert b"Complete the camp survey before paying taxes." in response.content
+    assert b"Complete Survey" in response.content
+    assert b'href="/survey/camp-survey/"' in response.content
+    assert b"Please pay your camp taxes" in response.content
+    assert b"Pay Taxes" not in response.content
+
+
+def test_dashboard_makes_taxes_current_after_active_camp_survey_is_complete(client) -> None:
+    user = create_user()
+    complete_profile(user)
+    survey = create_camp_survey()
+    camp_year = CampYear.objects.create(year=2026, camp_survey=survey)
+    mark_camp_survey_complete(user, survey)
+    client.force_login(user)
+
+    response = client.get("/2026/dashboard/")
+
+    assert response.status_code == 200
+    assert b"Camp survey complete." in response.content
+    assert b"Edit Survey" in response.content
+    assert b'href="/survey/camp-survey/"' in response.content
+    assert b"Pay Taxes" in response.content
+    assert b'href="/2026/taxes/"' in response.content
+    assert camp_year.camp_survey == survey
+
+
+def test_dashboard_blocks_taxes_when_inactive_camp_survey_is_incomplete(client) -> None:
+    user = create_user()
+    complete_profile(user)
+    survey = create_camp_survey(active=False)
+    CampYear.objects.create(year=2026, camp_survey=survey)
+    client.force_login(user)
+
+    response = client.get("/2026/dashboard/")
+
+    assert response.status_code == 200
+    assert b"The camp survey is not currently available. Contact an admin." in response.content
+    assert b"Complete Survey" not in response.content
+    assert b"Pay Taxes" not in response.content
+
+
+def test_dashboard_allows_taxes_when_inactive_camp_survey_was_completed(client) -> None:
+    user = create_user()
+    complete_profile(user)
+    survey = create_camp_survey(active=False)
+    CampYear.objects.create(year=2026, camp_survey=survey)
+    mark_camp_survey_complete(user, survey)
+    client.force_login(user)
+
+    response = client.get("/2026/dashboard/")
+
+    assert response.status_code == 200
+    assert b"Camp survey complete." in response.content
+    assert b"Edit Survey" not in response.content
+    assert b"Pay Taxes" in response.content
 
 
 def test_dashboard_shows_fully_registered_message_after_paid_taxes(client) -> None:

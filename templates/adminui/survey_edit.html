@@ -40,6 +40,13 @@
         <label>{{ survey_form.is_active }} Active</label>
         {{ survey_form.is_active.errors }}
       </div>
+      <h3>Redirect after submission</h3>
+      <div class="form-row">
+        {{ survey_form.redirect_after_submission_url.label_tag }}
+        {{ survey_form.redirect_after_submission_url }}
+        <p class="help-text">Leave blank to show {% url 'surveys:survey-complete' survey.slug %} after submission.</p>
+        {{ survey_form.redirect_after_submission_url.errors }}
+      </div>
       <button type="submit">Update Survey</button>
     </form>
   </section>

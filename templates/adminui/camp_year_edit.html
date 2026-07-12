@@ -13,11 +13,11 @@
     </p>
   </div>
 
-  <section id="dashboard-pages" class="content-card">
-    <h2>Dashboard Pages</h2>
-    <form method="post" action="{% url 'adminui:camp-year-edit' camp_year.year %}#dashboard-pages" novalidate>
+  <section id="dashboard-setup" class="content-card">
+    <h2>Dashboard Setup</h2>
+    <form method="post" action="{% url 'adminui:camp-year-edit' camp_year.year %}#dashboard-setup" novalidate>
       {% csrf_token %}
-      <input type="hidden" name="action" value="pages">
+      <input type="hidden" name="action" value="dashboard_setup">
       {{ pages_form.non_field_errors }}
       <div class="form-grid">
         <div class="form-row">
@@ -31,7 +31,13 @@
           {{ pages_form.dashboard_post_page.errors }}
         </div>
       </div>
-      <button type="submit">Update Pages</button>
+      <div class="form-row">
+        {{ pages_form.camp_survey.label_tag }}
+        {{ pages_form.camp_survey }}
+        <p class="help-text">The selected survey is required before members can pay taxes.</p>
+        {{ pages_form.camp_survey.errors }}
+      </div>
+      <button type="submit">Update Dashboard Setup</button>
     </form>
   </section>
 

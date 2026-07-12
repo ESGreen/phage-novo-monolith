@@ -47,7 +47,7 @@ from .forms import (
     AdminUserEmailForm,
     AdminUserFlagsForm,
     CampYearCreateForm,
-    CampYearPagesForm,
+    CampYearDashboardSetupForm,
     ContentPageForm,
     MediaUploadAdminForm,
     MenuForm,
@@ -204,7 +204,7 @@ def camp(request: HttpRequest) -> HttpResponse:
         camp_year.updated_by = request.user
         camp_year.save()
         messages.success(request, "Camp year created.")
-        return redirect(_camp_year_section_url(camp_year, "dashboard-pages"))
+        return redirect(_camp_year_section_url(camp_year, "dashboard-setup"))
 
     return render(
         request,
@@ -219,24 +219,28 @@ def camp(request: HttpRequest) -> HttpResponse:
 @admin_required
 def camp_year_edit(request: HttpRequest, year: int) -> HttpResponse:
     camp_year = get_object_or_404(
-        CampYear.objects.select_related("dashboard_pre_page", "dashboard_post_page"),
+        CampYear.objects.select_related(
+            "camp_survey",
+            "dashboard_pre_page",
+            "dashboard_post_page",
+        ),
         year=year,
     )
-    pages_form = CampYearPagesForm(instance=camp_year)
+    pages_form = CampYearDashboardSetupForm(instance=camp_year)
     tax_tier_form = TaxTierCreateForm(camp_year=camp_year)
     tax_add_on_form = TaxAddOnCreateForm(camp_year=camp_year)
     tax_override_form = TaxOverrideCreateForm(camp_year=camp_year)
 
     if request.method == "POST":
         action = request.POST.get("action")
-        if action == "pages":
-            pages_form = CampYearPagesForm(request.POST, instance=camp_year)
+        if action == "dashboard_setup":
+            pages_form = CampYearDashboardSetupForm(request.POST, instance=camp_year)
             if pages_form.is_valid():
                 updated_year = pages_form.save(commit=False)
                 updated_year.updated_by = request.user
                 updated_year.save()
-                messages.success(request, "Dashboard pages updated.")
-                return redirect(_camp_year_section_url(camp_year, "dashboard-pages"))
+                messages.success(request, "Dashboard setup updated.")
+                return redirect(_camp_year_section_url(camp_year, "dashboard-setup"))
         elif action == "tax_tier":
             tax_tier_form = TaxTierCreateForm(request.POST, camp_year=camp_year)
             if tax_tier_form.is_valid():
