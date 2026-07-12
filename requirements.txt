@@ -1,0 +1,8 @@
+Django>=5.2,<6.0
+psycopg[binary]>=3.2,<4.0
+stripe>=12,<13
+tomli>=2.0; python_version < "3.11"
+markdown>=3.7,<4.0
+bleach>=6.2,<7.0
+Pillow>=11,<12
+gunicorn>=23,<24
