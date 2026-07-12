@@ -38,9 +38,9 @@ def _verify_event(payload: bytes, signature: str):
     current_mode = SiteSettings.load().stripe_mode
     modes = [current_mode]
     other_mode = (
-        Payment.StripeMode.LIVE
-        if current_mode == Payment.StripeMode.TEST
-        else Payment.StripeMode.TEST
+        SiteSettings.StripeMode.LIVE
+        if current_mode == SiteSettings.StripeMode.TEST
+        else SiteSettings.StripeMode.TEST
     )
     modes.append(other_mode)
     verified = []
@@ -160,7 +160,7 @@ def _checkout_completion_errors(
         camp_year
     ):
         errors.append("Camp year metadata mismatch")
-    if payment.stripe_mode != stripe_mode:
+    if payment.mode != Payment.mode_for_stripe_mode(stripe_mode):
         errors.append("Stripe mode mismatch")
     if payment.stripe_checkout_session_id and payment.stripe_checkout_session_id != session_id:
         errors.append("Checkout Session ID mismatch")
@@ -279,7 +279,7 @@ def _log(
         payment=payment,
         level=level,
         event_type=event_type,
-        stripe_mode=stripe_mode,
+        mode=Payment.mode_for_stripe_mode(stripe_mode) if stripe_mode else "",
         stripe_event_id=event_id,
         message=message,
         redacted_payload={"event_type": event_type} if event_type else None,

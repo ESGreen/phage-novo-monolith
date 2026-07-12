@@ -76,12 +76,13 @@ Admins should be able to:
 - Set tax tiers and optional add-ons.
 - Set per-user tax overrides when needed.
 - See who has paid.
+- Add off-site manual camp tax payments when needed.
 - Edit member content pages and update static public pages outside Django when needed.
-- Review Stripe payment records.
+- Review payment records.
 
 ## Payment System
 
-Payments should use Stripe Checkout.
+Member-facing payments should use Stripe Checkout.
 
 The site should not collect or store card details.
 
@@ -95,6 +96,8 @@ The expected flow:
 - Django records the payment status.
 
 Stripe webhooks should be treated as the source of truth for successful payments.
+
+Admins can create manual paid payment records for off-site camp tax payments, such as cash or check. Manual payments should be stored as normal paid payment records with `mode = "manual"`, an optional note/reference, and `created_by` set to the admin who entered them.
 
 ## Content Pages
 

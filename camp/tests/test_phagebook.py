@@ -46,7 +46,7 @@ def mark_taxes_paid(user, camp_year: CampYear) -> None:
         user=user,
         camp_year=camp_year,
         status=Payment.Status.PAID,
-        stripe_mode=Payment.StripeMode.TEST,
+        mode=Payment.Mode.STRIPE_TEST,
         tax_amount_cents=10000,
         add_on_amount_cents=0,
         total_amount_cents=10000,

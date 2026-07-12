@@ -1,0 +1,93 @@
+{% extends "admin_base.html" %}
+{% load money static %}
+
+{% block title %}Add Payment - The Phage{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <h1>Add Payment</h1>
+    <p><a href="{% url 'adminui:payments' %}">Back to payments</a></p>
+  </div>
+
+  <form method="post" data-tax-form novalidate>
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <input class="visually-hidden" type="radio" name="_manual_tax_tier" value="manual" data-tax-tier-input data-tax-minimum-cents="0" checked>
+
+    <section class="content-card">
+      <h2>Create Payment For</h2>
+      <div class="form-row" data-user-combobox>
+        {{ form.user.label_tag }}
+        {{ form.user }}
+        <p class="help-text">Start typing a member name, then choose a suggestion.</p>
+        {{ form.user.errors }}
+      </div>
+      <div class="form-row">
+        {{ form.camp_year.label_tag }}
+        {{ form.camp_year }}
+        {{ form.camp_year.errors }}
+      </div>
+    </section>
+
+    <section class="content-card tax-summary-card">
+      <h2>Payment Amount</h2>
+      <p class="help-text">The tax tier snapshot is selected automatically from the entered tax amount and any tax override.</p>
+      <div class="form-row tax-amount-row">
+        {{ form.tax_amount_dollars.label_tag }}
+        {{ form.tax_amount_dollars }}
+        {{ form.tax_amount_dollars.errors }}
+      </div>
+
+      <h3>Available Add-ons</h3>
+      {% if available_add_ons %}
+        {{ form.add_ons.errors }}
+        <div class="tax-add-on-grid">
+          {% for add_on in available_add_ons %}
+            <label class="tax-add-on-card{% if add_on.id in form.selected_add_on_ids %} tax-add-on-card--selected{% endif %}" data-tax-add-on-card>
+              <input type="checkbox" name="add_ons" value="{{ add_on.id }}" data-tax-add-on-input data-tax-add-on-cents="{{ add_on.amount_cents }}"{% if add_on.id in form.selected_add_on_ids %} checked{% endif %}>
+              <span class="tax-add-on-card__body">
+                <span class="tax-add-on-card__heading">
+                  <strong>{{ add_on.name }}</strong>
+                  <span>{{ add_on.amount_cents|cents }}</span>
+                </span>
+                {% if add_on.description %}<span class="tax-add-on-card__description">{{ add_on.description }}</span>{% endif %}
+              </span>
+            </label>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p>No add-ons are currently available.</p>
+      {% endif %}
+
+      <div class="form-row">
+        {{ form.note.label_tag }}
+        {{ form.note }}
+        <p class="help-text">Optional reference such as cash, check number, or who confirmed the off-site payment.</p>
+        {{ form.note.errors }}
+      </div>
+
+      <h3>Total Payment</h3>
+      <dl class="tax-summary-list">
+        <div>
+          <dt>Tax amount</dt>
+          <dd data-tax-amount-display>$0.00</dd>
+        </div>
+        <div>
+          <dt>Add-ons</dt>
+          <dd data-tax-add-on-display>$0.00</dd>
+        </div>
+        <div class="tax-summary-list__total">
+          <dt>Total payment</dt>
+          <dd data-tax-total-display>$0.00</dd>
+        </div>
+      </dl>
+      <p class="help-text" data-tax-zero-message>No payment is needed unless you select an add-on.</p>
+      <button type="submit">Add Payment</button>
+    </section>
+  </form>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/admin-camp.js' %}" defer></script>
+  <script src="{% static 'js/taxes.js' %}" defer></script>
+{% endblock %}

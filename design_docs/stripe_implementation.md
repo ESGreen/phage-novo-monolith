@@ -27,6 +27,8 @@ The goals are:
 - Failed, cancelled, refunded, and `requires_review` payments do not count as paid.
 - Production may run in Stripe test mode for annual payment-flow testing.
 - Test/live mode is controlled only from `/admin/stripe/`.
+- `Payment.mode` distinguishes `stripe_test`, `stripe_live`, and `manual` records.
+- Manual payments are admin-created off-site payment records and do not go through Stripe Checkout or webhooks.
 
 ## Configuration
 
@@ -74,6 +76,7 @@ Rules:
 - Secrets are never edited through the web UI.
 - Secrets are never displayed in the web UI.
 - Secrets are never written to payment logs.
+- `SiteSettings.stripe_mode` maps to `Payment.mode = "stripe_test"` or `Payment.mode = "stripe_live"` when creating Stripe Checkout payments.
 
 ## Checkout Creation Flow
 
@@ -95,7 +98,7 @@ When the member submits the tax payment form:
 8. Confirm selected add-ons are currently available.
 9. Compute effective minimum.
 10. Validate entered tax amount.
-11. Create local `Payment(status="created")` with `checkout_expires_at`.
+11. Create local `Payment(status="created")` with `checkout_expires_at`, `mode` mapped from `SiteSettings.stripe_mode`, and `created_by` set to the paying member.
 12. Create related `PaymentAddOn` snapshot rows.
 13. Create Stripe Checkout Session.
 14. Store `stripe_checkout_session_id` and `checkout_created_at`.
@@ -198,6 +201,8 @@ camp_year
 stripe_mode
 ```
 
+`stripe_mode` metadata may remain `test` or `live` because it describes the Stripe environment. Local verification maps it to the corresponding payment mode value, `stripe_test` or `stripe_live`.
+
 Optional helpful metadata:
 
 ```text
@@ -258,7 +263,7 @@ Recommended behavior:
 
 - Try the current mode's webhook secret first.
 - If verification fails, try the other mode's webhook secret.
-- If exactly one secret verifies, accept the event and assign that `stripe_mode`.
+- If exactly one secret verifies, accept the event and assign that Stripe mode.
 - If no secret verifies, reject with `400`.
 - If both somehow verify, reject or mark suspicious.
 
@@ -310,7 +315,7 @@ For `checkout.session.completed`, verify:
 - Local payment exists.
 - Local payment user matches metadata.
 - Local payment camp year matches metadata.
-- Local payment Stripe mode matches verified webhook mode.
+- Local payment mode matches the verified webhook mode after mapping `test` to `stripe_test` and `live` to `stripe_live`.
 - Checkout Session ID matches local payment, or local payment session ID is blank and can be safely filled.
 - Stripe `payment_status` is `paid`.
 - Stripe amount total matches `Payment.total_amount_cents`.
@@ -404,6 +409,7 @@ Create `PaymentLog` entries for:
 - Webhook verification failure.
 - Webhook state change.
 - `requires_review` decision.
+- Manual payment creation.
 - Test payment cleanup.
 
 Logs must not store:
@@ -427,14 +433,38 @@ Behavior:
 - Deletes related test `PaymentAddOn` rows.
 - Deletes related test `PaymentLog` rows where appropriate.
 - Never deletes live payment records.
+- Never deletes manual payment records.
 - Requires confirmation before cleanup.
 
 Rules:
 
-- Match test payments by `Payment.stripe_mode = "test"`.
+- Match test payments by `Payment.mode = "stripe_test"`.
 - Do not call Stripe to delete payments.
 - Stripe Dashboard test records remain in Stripe.
 - After cleanup, the test user can repeat the payment flow.
+
+## Manual Off-Site Payments
+
+Admin URL:
+
+```text
+/admin/payments/add/
+```
+
+Behavior:
+
+- Creates a local `Payment` with `mode = "manual"`, `status = "paid"`, and `paid_at` set at creation.
+- Sets `created_by` to the admin user who creates the payment.
+- Stores an optional admin note/reference in `Payment.note`.
+- Leaves Stripe Checkout Session ID and Stripe Payment Intent ID blank.
+- Creates the same tax tier snapshot and selected `PaymentAddOn` snapshot rows as Stripe payments.
+- Creates a `PaymentLog` entry such as `manual_payment.create` with `mode = "manual"`.
+- Blocks creation if the user already has a `paid` payment for the selected camp year.
+- Blocks creation if the user has an unexpired `created` Stripe Checkout payment for the selected camp year.
+- Chooses the tax tier snapshot automatically using the greatest available tier or effective override minimum less than or equal to the entered tax amount.
+- If no tier or override qualifies, shows a validation error telling the admin to create an appropriate tax override.
+
+Manual payments are for camp tax payments received outside Stripe, such as cash, check, or other off-site handling. They are not an arbitrary donation or extra-payment system.
 
 ## Stripe Admin Health
 

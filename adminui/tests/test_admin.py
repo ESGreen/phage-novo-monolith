@@ -13,7 +13,7 @@ from PIL import Image
 from camp.models import CampYear, TaxAddOn, TaxOverride, TaxTier
 from content.models import ContentPage, MediaItem, Menu, MenuItem
 from core.models import SiteSettings
-from payments.models import Payment, PaymentLog
+from payments.models import Payment, PaymentAddOn, PaymentLog
 from surveys.models import Survey
 
 pytestmark = pytest.mark.django_db
@@ -23,6 +23,7 @@ ADMIN_SECTIONS = [
     "/admin/users/",
     "/admin/camp/",
     "/admin/payments/",
+    "/admin/payments/add/",
     "/admin/stripe/",
     "/admin/pages/",
     "/admin/surveys/",
@@ -165,19 +166,20 @@ def test_payments_admin_renders_payment_and_log_tables(client) -> None:
         user=member,
         camp_year=camp_year,
         status=Payment.Status.PAID,
-        stripe_mode=Payment.StripeMode.TEST,
+        mode=Payment.Mode.STRIPE_TEST,
         tax_amount_cents=30000,
         add_on_amount_cents=2500,
         total_amount_cents=32500,
         tax_tier_name_snapshot="Standard",
         tax_tier_minimum_cents_snapshot=10000,
+        created_by=member,
         paid_at=timezone.now(),
     )
     payment_log = PaymentLog.objects.create(
         payment=payment,
         level=PaymentLog.Level.INFO,
         event_type="checkout.create.success",
-        stripe_mode=Payment.StripeMode.TEST,
+        mode=Payment.Mode.STRIPE_TEST,
         message="Stripe Checkout session created.",
     )
     PaymentLog.objects.create(
@@ -193,10 +195,13 @@ def test_payments_admin_renders_payment_and_log_tables(client) -> None:
     log_timestamp = timezone.localtime(payment_log.created_at).strftime("%Y-%m-%d %H:%M:%S")
 
     assert response.status_code == 200
-    assert body.count('<section class="content-card">') == 2
+    assert body.count('<section class="content-card">') == 3
     assert "<h1>Payments</h1>" in body
     assert "<h2>Recent Logs</h2>" in body
+    assert "<h2>Add Payment</h2>" in body
+    assert 'href="/admin/payments/add/"' in body
     assert "member@example.com" in body
+    assert "Stripe test" in body
     assert "$300.00" in body
     assert "$25.00" in body
     assert "$325.00" in body
@@ -207,6 +212,225 @@ def test_payments_admin_renders_payment_and_log_tables(client) -> None:
     assert "webhook.signature.failure" in body
     assert "Webhook signature verification failed." in body
     assert "----" in body
+
+
+def test_manual_payment_add_page_renders_form(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    member = create_user(
+        email="member@example.com",
+        first_name="Jane",
+        last_name="Member",
+    )
+    current_year = CampYear.objects.create(year=2027)
+    older_year = CampYear.objects.create(year=2026)
+    create_tax_tier(current_year, name="Standard", minimum_amount_cents=10000)
+    create_tax_add_on(current_year, name="Hoodie", amount_cents=2500)
+    client.force_login(admin)
+
+    response = client.get("/admin/payments/add/")
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert "Create Payment For" in body
+    assert "Payment Amount" in body
+    assert 'data-user-combobox' in body
+    assert "Jane Member - member@example.com" in body
+    assert list(response.context["form"].fields["camp_year"].queryset) == [
+        current_year,
+        older_year,
+    ]
+    assert "Hoodie" in body
+    assert "$25.00" in body
+    assert 'data-tax-form' in body
+    assert 'src="/static/js/admin-camp.js"' in body
+    assert 'src="/static/js/taxes.js"' in body
+    assert "Add Payment" in body
+    assert str(member.id) in body
+
+
+def test_admin_can_create_manual_payment(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    member = create_user(
+        email="member@example.com",
+        first_name="Jane",
+        last_name="Member",
+    )
+    camp_year = CampYear.objects.create(year=2026)
+    create_tax_tier(camp_year, name="Budget", minimum_amount_cents=5000)
+    create_tax_tier(camp_year, name="Standard", minimum_amount_cents=10000)
+    add_on = create_tax_add_on(camp_year, name="Hoodie", amount_cents=2500)
+    client.force_login(admin)
+
+    response = client.post(
+        "/admin/payments/add/",
+        {
+            "user": str(member.id),
+            "camp_year": str(camp_year.id),
+            "tax_amount_dollars": "125.00",
+            "add_ons": [str(add_on.id)],
+            "note": "check #123",
+        },
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == "/admin/payments/"
+    payment = Payment.objects.get()
+    assert payment.user == member
+    assert payment.camp_year == camp_year
+    assert payment.status == Payment.Status.PAID
+    assert payment.mode == Payment.Mode.MANUAL
+    assert payment.created_by == admin
+    assert payment.note == "check #123"
+    assert payment.paid_at is not None
+    assert payment.tax_amount_cents == 12500
+    assert payment.add_on_amount_cents == 2500
+    assert payment.total_amount_cents == 15000
+    assert payment.tax_tier_name_snapshot == "Standard"
+    assert payment.tax_tier_minimum_cents_snapshot == 10000
+    assert payment.stripe_checkout_session_id is None
+    assert payment.stripe_payment_intent_id is None
+    payment_add_on = PaymentAddOn.objects.get(payment=payment)
+    assert payment_add_on.tax_add_on == add_on
+    assert payment_add_on.name_snapshot == "Hoodie"
+    payment_log = PaymentLog.objects.get(payment=payment)
+    assert payment_log.event_type == "manual_payment.create"
+    assert payment_log.mode == Payment.Mode.MANUAL
+    assert "check #123" in payment_log.message
+
+
+def test_manual_payment_uses_reduced_override_when_qualified(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    member = create_user(
+        email="member@example.com",
+        first_name="Jane",
+        last_name="Member",
+    )
+    camp_year = CampYear.objects.create(year=2026)
+    create_tax_tier(camp_year, name="Standard", minimum_amount_cents=10000)
+    TaxOverride.objects.create(
+        user=member,
+        camp_year=camp_year,
+        override_type=TaxOverride.OverrideType.REDUCED_MINIMUM,
+        reduced_minimum_amount_cents=5000,
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        "/admin/payments/add/",
+        {
+            "user": str(member.id),
+            "camp_year": str(camp_year.id),
+            "tax_amount_dollars": "75.00",
+            "add_ons": [],
+            "note": "cash",
+        },
+    )
+
+    assert response.status_code == 302
+    payment = Payment.objects.get()
+    assert payment.tax_tier_name_snapshot == "Reduced Minimum"
+    assert payment.tax_tier_minimum_cents_snapshot == 5000
+
+
+def test_manual_payment_rejects_existing_paid_payment(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    member = create_user(
+        email="member@example.com",
+        first_name="Jane",
+        last_name="Member",
+    )
+    camp_year = CampYear.objects.create(year=2026)
+    create_tax_tier(camp_year, name="Standard", minimum_amount_cents=10000)
+    Payment.objects.create(
+        user=member,
+        camp_year=camp_year,
+        status=Payment.Status.PAID,
+        mode=Payment.Mode.MANUAL,
+        tax_amount_cents=10000,
+        add_on_amount_cents=0,
+        total_amount_cents=10000,
+        tax_tier_name_snapshot="Standard",
+        tax_tier_minimum_cents_snapshot=10000,
+        paid_at=timezone.now(),
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        "/admin/payments/add/",
+        {
+            "user": str(member.id),
+            "camp_year": str(camp_year.id),
+            "tax_amount_dollars": "100.00",
+            "add_ons": [],
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"This user already has a paid payment for this camp year." in response.content
+    assert Payment.objects.count() == 1
+
+
+def test_manual_payment_rejects_unexpired_pending_checkout(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    member = create_user(
+        email="member@example.com",
+        first_name="Jane",
+        last_name="Member",
+    )
+    camp_year = CampYear.objects.create(year=2026)
+    create_tax_tier(camp_year, name="Standard", minimum_amount_cents=10000)
+    Payment.objects.create(
+        user=member,
+        camp_year=camp_year,
+        status=Payment.Status.CREATED,
+        mode=Payment.Mode.STRIPE_TEST,
+        tax_amount_cents=10000,
+        add_on_amount_cents=0,
+        total_amount_cents=10000,
+        tax_tier_name_snapshot="Standard",
+        tax_tier_minimum_cents_snapshot=10000,
+        checkout_expires_at=timezone.now() + timedelta(hours=1),
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        "/admin/payments/add/",
+        {
+            "user": str(member.id),
+            "camp_year": str(camp_year.id),
+            "tax_amount_dollars": "100.00",
+            "add_ons": [],
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"unexpired pending Stripe checkout" in response.content
+    assert Payment.objects.count() == 1
+
+
+def test_manual_payment_requires_qualifying_tier_or_override(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    member = create_user(
+        email="member@example.com",
+        first_name="Jane",
+        last_name="Member",
+    )
+    camp_year = CampYear.objects.create(year=2026)
+    client.force_login(admin)
+
+    response = client.post(
+        "/admin/payments/add/",
+        {
+            "user": str(member.id),
+            "camp_year": str(camp_year.id),
+            "tax_amount_dollars": "25.00",
+            "add_ons": [],
+        },
+    )
+
+    assert response.status_code == 200
+    assert b"Create an appropriate tax override" in response.content
+    assert not Payment.objects.exists()
 
 
 def test_users_admin_renders_client_side_search_and_sort_controls(client) -> None:
@@ -550,7 +774,7 @@ def test_camp_admin_lists_years_descending_with_summary_counts(client) -> None:
         user=paid_member,
         camp_year=current_year,
         status=Payment.Status.PAID,
-        stripe_mode=Payment.StripeMode.TEST,
+        mode=Payment.Mode.STRIPE_TEST,
         tax_amount_cents=10000,
         add_on_amount_cents=0,
         total_amount_cents=10000,
@@ -1602,13 +1826,14 @@ def test_admin_can_switch_stripe_mode(client) -> None:
 def test_admin_test_payment_cleanup_leaves_live_payments(client) -> None:
     admin = create_user(email="admin@example.com", is_admin=True)
     member = create_user(email="member@example.com")
+    manual_member = create_user(email="manual@example.com")
     camp_year = CampYear.objects.create(year=2026)
     client.force_login(admin)
     Payment.objects.create(
         user=member,
         camp_year=camp_year,
         status=Payment.Status.CREATED,
-        stripe_mode=Payment.StripeMode.TEST,
+        mode=Payment.Mode.STRIPE_TEST,
         tax_amount_cents=10000,
         add_on_amount_cents=0,
         total_amount_cents=10000,
@@ -1620,13 +1845,25 @@ def test_admin_test_payment_cleanup_leaves_live_payments(client) -> None:
         user=member,
         camp_year=camp_year,
         status=Payment.Status.CREATED,
-        stripe_mode=Payment.StripeMode.LIVE,
+        mode=Payment.Mode.STRIPE_LIVE,
         tax_amount_cents=10000,
         add_on_amount_cents=0,
         total_amount_cents=10000,
         tax_tier_name_snapshot="Standard",
         tax_tier_minimum_cents_snapshot=10000,
         checkout_expires_at=timezone.now() + timedelta(hours=1),
+    )
+    manual_payment = Payment.objects.create(
+        user=manual_member,
+        camp_year=camp_year,
+        status=Payment.Status.PAID,
+        mode=Payment.Mode.MANUAL,
+        tax_amount_cents=10000,
+        add_on_amount_cents=0,
+        total_amount_cents=10000,
+        tax_tier_name_snapshot="Standard",
+        tax_tier_minimum_cents_snapshot=10000,
+        paid_at=timezone.now(),
     )
     page_response = client.get("/admin/stripe/")
     assert 'class="danger-button"' in page_response.content.decode()
@@ -1637,4 +1874,7 @@ def test_admin_test_payment_cleanup_leaves_live_payments(client) -> None:
     )
 
     assert response.status_code == 302
-    assert list(Payment.objects.values_list("id", flat=True)) == [live_payment.id]
+    assert set(Payment.objects.values_list("id", flat=True)) == {
+        live_payment.id,
+        manual_payment.id,
+    }

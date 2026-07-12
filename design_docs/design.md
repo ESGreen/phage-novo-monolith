@@ -265,7 +265,7 @@ If a person should not be allowed to pay taxes or access the site, their account
 
 ### Payment
 
-Stores local records of Stripe payment activity.
+Stores local records of Stripe payment activity and admin-created manual payment activity.
 
 Payments are used to show member payment status, support admin reconciliation, and preserve a local record of what happened. The site should not store card details.
 
@@ -275,10 +275,12 @@ Likely fields:
 - Camp year.
 - Amount.
 - Status.
-- Stripe mode.
+- Mode: `stripe_test`, `stripe_live`, or `manual`.
 - Stripe Checkout Session ID.
 - Stripe Payment Intent ID.
 - Checkout expiration timestamp.
+- Optional note/reference.
+- Created by.
 - Created at.
 - Paid at.
 
@@ -293,17 +295,19 @@ Initial status values:
 - `refunded`
 - `requires_review`
 
-Stripe webhooks should be the source of truth for marking a payment as paid. The browser success page is only a user experience convenience.
+Stripe webhooks should be the source of truth for marking Stripe Checkout payments as paid. The browser success page is only a user experience convenience.
 
 V1 accepts credit cards only through Stripe Checkout.
+
+Admins can create manual paid payment records for off-site camp tax payments from the payments admin. Manual payments do not use Stripe Checkout, should store `mode = "manual"`, should store the creating admin in `created_by`, and may store an optional note/reference.
 
 A user may have more than one payment attempt. A member should be considered paid for a camp year if they have at least one successful paid payment for that year.
 
 The payment amount should include the selected tax amount plus any selected add-ons.
 
-Stripe mode should be stored on payments for correctness, review, and troubleshooting. Test/live mode is exposed through `/admin/stripe/`, not as a separate member-facing workflow.
+Payment mode should be stored on payments for correctness, review, and troubleshooting. Stripe test/live configuration is exposed through `/admin/stripe/`, not as a separate member-facing workflow. Manual payment creation is exposed through the payments admin.
 
-Payment and Stripe communication should be logged for troubleshooting. This includes Stripe checkout creation, webhook receipt, webhook validation, and relevant Stripe responses. Logs should avoid storing secrets and should not include card data.
+Payment and Stripe communication should be logged for troubleshooting. This includes Stripe checkout creation, webhook receipt, webhook validation, relevant Stripe responses, and manual payment creation. Logs should avoid storing secrets and should not include card data.
 
 If a Stripe webhook or payment record does not match expected local data, the payment should be marked `requires_review` rather than silently failing or being marked paid. For V1, these cases can be handled by an admin directly in the database if they ever occur; no custom web workflow is required.
 
@@ -680,10 +684,14 @@ This area should show:
 - Camp year.
 - User.
 - Stripe identifiers.
+- Payment mode.
+- Manual payment notes.
 - Selected add-ons.
 - Related Stripe/payment log entries.
 
 Payments marked `requires_review` should be visible here. For V1, there does not need to be a custom workflow for resolving them in the web app.
+
+Admins can add off-site camp tax payments at `/admin/payments/add/`. The form should select a user, camp year, tax amount, optional add-ons, and optional note/reference. Manual payments are created as paid records with `mode = "manual"` and `created_by` set to the admin.
 
 ### Stripe Admin
 
@@ -1056,8 +1064,9 @@ If a person should not be allowed to pay taxes or access private information, th
 - Media starts as one flat folder with no subfolders.
 - Media may later gain a folder structure that reflects disk storage.
 - Media storage filenames may be system-generated.
-- Test payment deletion belongs in `/admin/stripe/`.
+- Test payment deletion belongs in `/admin/stripe/` and deletes only `stripe_test` records.
 - Stripe test/live mode is visible and controlled in `/admin/stripe/`.
+- Manual off-site camp tax payments are created from `/admin/payments/add/` and use `Payment.mode = "manual"`.
 - Production may be switched to Stripe test mode for yearly payment-flow testing.
 - Public pages are static files under `/public/`, not Django-managed content pages.
 - `/` redirects to `/public/`.

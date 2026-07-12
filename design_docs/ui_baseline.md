@@ -224,6 +224,7 @@ Use Django messages for:
 - Validation failures that are not field-specific.
 - Stripe mode switched.
 - Test payments deleted.
+- Manual payment added.
 - Password changed.
 
 Message levels:
@@ -397,6 +398,27 @@ Switching mode:
 - Show confirmation or clear post-action message.
 - Do not expose secrets.
 
+## Manual Payment UI
+
+`/admin/payments/` should include an Add Payment card linking to `/admin/payments/add/`.
+
+Manual Add Payment should show:
+
+- User selector using the same named-user combobox pattern as tax overrides.
+- Camp year selector with current year first.
+- Tax amount input.
+- Available add-ons as checkbox cards matching the member taxes page.
+- Optional note/reference textarea.
+- Summary rows for tax amount, add-ons, and total payment.
+- Submit button labeled `Add Payment`.
+
+Rules:
+
+- The form remains a normal server-rendered POST without JavaScript.
+- JavaScript may enhance add-on selection and total calculation but server validation remains authoritative.
+- Successful creation redirects back to `/admin/payments/` with a success message.
+- Field errors explain duplicate paid payments, unexpired pending checkout payments, and missing qualifying tax tier/override.
+
 ## Accessibility Baseline
 
 V1 should follow basic accessibility practices:
@@ -428,6 +450,7 @@ Do not require JavaScript for:
 - Admin forms.
 - Menu page navigation.
 - Stripe mode switching.
+- Manual payment creation.
 
 Stripe Checkout itself may require Stripe's hosted JavaScript after redirect, but local site functionality should remain server-rendered.
 

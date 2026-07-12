@@ -9,9 +9,12 @@ from django.db.models import Q
 from django.utils import timezone
 
 from accounts.models import User
+from camp.forms import build_tax_options
 from camp.models import CampYear, TaxAddOn, TaxOverride, TaxTier
+from camp.taxes import available_tax_add_ons, decimal_dollars_to_cents
 from content.media import create_media_item
 from content.models import ContentPage, Menu, MenuItem
+from payments.models import Payment
 
 
 class AdminUserCreateForm(forms.Form):
@@ -410,6 +413,124 @@ class TaxOverrideCreateForm(forms.Form):
         if commit:
             obj.save()
         return obj
+
+
+class ManualPaymentCreateForm(forms.Form):
+    user = NamedUserChoiceField(
+        queryset=User.objects.none(),
+        widget=NamedUserSelect(attrs={"data-user-combobox-select": "true"}),
+    )
+    camp_year = forms.ModelChoiceField(label="Camp year", queryset=CampYear.objects.none())
+    tax_amount_dollars = forms.DecimalField(
+        label="Tax amount",
+        min_value=Decimal("0.00"),
+        max_digits=8,
+        decimal_places=2,
+        widget=forms.NumberInput(attrs={"step": "5.00", "data-tax-amount-input": "true"}),
+    )
+    add_ons = forms.ModelMultipleChoiceField(
+        queryset=TaxAddOn.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+    note = forms.CharField(
+        label="Note/reference",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        initial = kwargs.pop("initial", {}).copy()
+        camp_years = CampYear.objects.order_by("-year")
+        current_camp_year = camp_years.first()
+        if current_camp_year is not None:
+            initial.setdefault("camp_year", current_camp_year.pk)
+        super().__init__(*args, initial=initial, **kwargs)
+        self.fields["user"].queryset = _named_users()
+        self.fields["camp_year"].queryset = camp_years
+        self.selected_camp_year = self._selected_camp_year(camp_years)
+        self.fields["add_ons"].queryset = (
+            available_tax_add_ons(self.selected_camp_year)
+            if self.selected_camp_year is not None
+            else TaxAddOn.objects.none()
+        )
+
+    @property
+    def selected_add_on_ids(self) -> set[int]:
+        value = self["add_ons"].value() or []
+        return {int(add_on_id) for add_on_id in value if str(add_on_id).isdigit()}
+
+    def _selected_camp_year(self, camp_years) -> CampYear | None:
+        value = self.data.get("camp_year") if self.is_bound else self.initial.get("camp_year")
+        if isinstance(value, CampYear):
+            return value
+        if value:
+            try:
+                return camp_years.filter(pk=value).first()
+            except (TypeError, ValueError):
+                return None
+        return camp_years.first()
+
+    def clean(self) -> dict[str, object]:
+        cleaned_data = super().clean()
+        user = cleaned_data.get("user")
+        camp_year = cleaned_data.get("camp_year")
+        tax_amount_dollars = cleaned_data.get("tax_amount_dollars")
+        add_ons = cleaned_data.get("add_ons") or []
+
+        if user is None or camp_year is None or tax_amount_dollars is None:
+            return cleaned_data
+
+        if Payment.objects.filter(
+            user=user,
+            camp_year=camp_year,
+            status=Payment.Status.PAID,
+        ).exists():
+            self.add_error("user", "This user already has a paid payment for this camp year.")
+
+        if Payment.objects.filter(
+            user=user,
+            camp_year=camp_year,
+            status=Payment.Status.CREATED,
+            checkout_expires_at__gt=timezone.now(),
+        ).exists():
+            self.add_error(
+                "user",
+                "This user has an unexpired pending Stripe checkout for this camp year.",
+            )
+
+        tax_amount_cents = decimal_dollars_to_cents(tax_amount_dollars)
+        tax_options = build_tax_options(user, camp_year)
+        qualifying_options = [
+            option
+            for option in tax_options
+            if option.minimum_amount_cents <= tax_amount_cents
+        ]
+        if not qualifying_options:
+            self.add_error(
+                "tax_amount_dollars",
+                (
+                    "No tax tier or override qualifies for this amount. Create an "
+                    "appropriate tax override before adding this payment."
+                ),
+            )
+            return cleaned_data
+
+        tax_option = max(
+            qualifying_options,
+            key=lambda option: option.minimum_amount_cents,
+        )
+        add_on_amount_cents = sum(add_on.amount_cents for add_on in add_ons)
+        total_amount_cents = tax_amount_cents + add_on_amount_cents
+        if total_amount_cents <= 0:
+            raise forms.ValidationError("No payment is needed unless you select an add-on.")
+
+        cleaned_data["tax_amount_cents"] = tax_amount_cents
+        cleaned_data["effective_minimum_cents"] = tax_option.minimum_amount_cents
+        cleaned_data["add_on_amount_cents"] = add_on_amount_cents
+        cleaned_data["total_amount_cents"] = total_amount_cents
+        cleaned_data["tax_tier_name_snapshot"] = tax_option.name
+        return cleaned_data
 
 
 class MediaUploadAdminForm(forms.Form):

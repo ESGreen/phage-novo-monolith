@@ -63,13 +63,14 @@ def create_tax_checkout(user: object, camp_year: CampYear, form) -> CheckoutResu
             user=user,
             camp_year=camp_year,
             status=Payment.Status.CREATED,
-            stripe_mode=SiteSettings.load().stripe_mode,
+            mode=Payment.mode_for_stripe_mode(SiteSettings.load().stripe_mode),
             tax_amount_cents=tax_amount_cents,
             add_on_amount_cents=add_on_amount_cents,
             total_amount_cents=total_amount_cents,
             tax_tier_name_snapshot=tax_tier_name,
             tax_tier_minimum_cents_snapshot=effective_minimum_cents,
             checkout_expires_at=now + timedelta(hours=1),
+            created_by=user,
         )
         for add_on in selected_add_ons:
             PaymentAddOn.objects.create(
@@ -83,7 +84,7 @@ def create_tax_checkout(user: object, camp_year: CampYear, form) -> CheckoutResu
             payment=payment,
             level=PaymentLog.Level.INFO,
             event_type="checkout.create.request",
-            stripe_mode=payment.stripe_mode,
+            mode=payment.mode,
             message="Creating Stripe Checkout session.",
         )
 
@@ -116,7 +117,7 @@ def create_tax_checkout(user: object, camp_year: CampYear, form) -> CheckoutResu
         payment=payment,
         level=PaymentLog.Level.INFO,
         event_type="checkout.create.success",
-        stripe_mode=payment.stripe_mode,
+        mode=payment.mode,
         message="Stripe Checkout session created.",
         redacted_payload={"stripe_checkout_session_id": session_id},
     )
@@ -162,7 +163,7 @@ def _metadata(payment: Payment) -> dict[str, str]:
         "user_id": str(payment.user_id),
         "camp_year_id": str(payment.camp_year_id),
         "camp_year": str(payment.camp_year.year),
-        "stripe_mode": payment.stripe_mode,
+        "stripe_mode": Payment.stripe_mode_for_mode(payment.mode),
         "tax_tier_name": payment.tax_tier_name_snapshot,
         "tax_amount_cents": str(payment.tax_amount_cents),
         "add_on_amount_cents": str(payment.add_on_amount_cents),

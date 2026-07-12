@@ -9,7 +9,7 @@ It covers:
 - Database schema.
 - Media/file storage.
 - Static public files.
-- Stripe configuration and test/live payment records.
+- Stripe configuration, test/live Stripe payment records, and manual payment records.
 - Backup and recovery assumptions.
 
 The first focus is the database schema. Other storage details are included afterward.
@@ -320,7 +320,7 @@ If an override is no longer needed, delete it.
 
 ## Payments
 
-Payments store local records of Stripe payment activity.
+Payments store local records of Stripe payment activity and admin-created manual payment activity.
 
 The site should not store card details.
 
@@ -333,14 +333,15 @@ Likely fields:
 - Camp year.
 - Amount in cents.
 - Status.
-- Stripe mode.
-- Stripe Checkout Session ID.
-- Stripe Payment Intent ID.
-- Checkout expiration timestamp.
+- Mode.
+- Stripe Checkout Session ID, blank for manual payments.
+- Stripe Payment Intent ID, blank for manual payments.
+- Checkout expiration timestamp, blank for manual payments.
+- Note, optional.
 - Created at.
 - Updated at.
 - Paid at.
-- Created by, where practical.
+- Created by.
 - Updated by, where practical.
 
 Initial payment statuses:
@@ -352,24 +353,29 @@ Initial payment statuses:
 - `refunded`
 - `requires_review`
 
-Stripe mode values:
+Payment mode values:
 
-- `test`
-- `live`
+- `stripe_test`
+- `stripe_live`
+- `manual`
 
-Stripe mode is stored for correctness, review, and troubleshooting. Test/live mode is exposed through `/admin/stripe/`.
+Payment mode is stored for correctness, review, and troubleshooting. Test/live Stripe configuration is exposed through `/admin/stripe/`; manual payments are created from the payments admin.
 
 V1 accepts credit cards only through Stripe Checkout.
+
+Manual payments represent off-site tax payments entered by an admin. They are created as paid records, store `created_by` as the admin user, can include an optional note/reference, and do not have Stripe IDs.
+
+Stripe Checkout payments store `created_by` as the paying member.
 
 A member is considered paid for a camp year if they have at least one `paid` payment for that year.
 
 If a Stripe webhook or payment event does not match expected local payment data, the payment should be marked `requires_review`. For V1, these cases can be resolved directly in the database by an admin if needed. No custom web workflow is required.
 
-Test payments can be deleted from `/admin/stripe/`. Deleting a test payment deletes the local database records. Stripe test references do not need to be preserved locally.
+Test payments can be deleted from `/admin/stripe/` by matching `mode = "stripe_test"`. Deleting a test payment deletes the local database records. Stripe test references do not need to be preserved locally. Manual payments are not test payments and must not be deleted by this cleanup path.
 
 ## Payment Logs
 
-Payment logs store Stripe-related request, response, and webhook activity for troubleshooting.
+Payment logs store Stripe-related request, response, webhook activity, and manual payment audit activity for troubleshooting.
 
 The site should log useful traffic between the website and Stripe, including checkout creation, Stripe responses, webhook receipt, webhook validation, and webhook processing results.
 
@@ -381,7 +387,7 @@ Likely fields:
 - Payment, optional.
 - Direction.
 - Event type.
-- Stripe mode.
+- Mode.
 - Stripe event ID, optional.
 - Stripe Checkout Session ID, optional.
 - Stripe Payment Intent ID, optional.

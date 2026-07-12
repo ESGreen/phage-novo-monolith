@@ -241,7 +241,7 @@ Behavior:
 - User may select currently available add-ons.
 - Waived users may select add-ons at full price and start checkout for add-ons.
 - Zero-dollar waived checkout is rejected because no payment is needed.
-- Submit creates a local `Payment` and starts Stripe Checkout.
+- Submit creates a local Stripe-mode `Payment` and starts Stripe Checkout.
 
 ## Content Page
 
@@ -429,6 +429,7 @@ Behavior:
 URL:
 
 - `/admin/payments/`
+- `/admin/payments/add/`
 
 List columns:
 
@@ -437,18 +438,25 @@ List columns:
 | User |
 | Camp year |
 | Status |
-| Stripe mode |
+| Mode |
 | Tax amount |
 | Add-on amount |
 | Total |
 | Created |
 | Paid at |
+| Note |
 
 Behavior:
 
 - Admins can view payment detail.
 - Admins can inspect selected add-ons.
 - Admins can inspect payment logs.
+- Admins can use an Add Payment card on `/admin/payments/` to create off-site manual camp tax payments.
+- Manual payment form fields are user, camp year, tax amount, available add-ons, and optional note/reference.
+- Manual payments are created with `mode = "manual"`, `status = "paid"`, `paid_at` set immediately, and `created_by` set to the admin.
+- Manual payment creation blocks if the user/year already has a `paid` payment or an unexpired `created` Stripe checkout payment.
+- Manual payment creation chooses the tax tier snapshot automatically from the greatest available tier or effective override minimum less than or equal to the entered tax amount.
+- If no tier or override qualifies, the admin sees a validation error directing them to create an appropriate tax override.
 - V1 does not need custom UI to resolve `requires_review`.
 - Rare `requires_review` resolution may be handled directly in the database after confirming Stripe truth.
 

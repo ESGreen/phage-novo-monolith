@@ -10,13 +10,13 @@ from .models import Payment
 
 
 def secret_key_for_mode(stripe_mode: str) -> str:
-    if stripe_mode == Payment.StripeMode.LIVE:
+    if stripe_mode == "live":
         return settings.CONFIG.stripe.live_secret_key
     return settings.CONFIG.stripe.test_secret_key
 
 
 def webhook_secret_for_mode(stripe_mode: str) -> str:
-    if stripe_mode == Payment.StripeMode.LIVE:
+    if stripe_mode == "live":
         return settings.CONFIG.stripe.live_webhook_secret
     return settings.CONFIG.stripe.test_webhook_secret
 
@@ -41,7 +41,7 @@ def create_checkout_session(
     cancel_url: str,
     metadata: dict[str, str],
 ):
-    stripe.api_key = secret_key_for_mode(payment.stripe_mode)
+    stripe.api_key = secret_key_for_mode(Payment.stripe_mode_for_mode(payment.mode))
     return stripe.checkout.Session.create(
         mode="payment",
         payment_method_types=["card"],

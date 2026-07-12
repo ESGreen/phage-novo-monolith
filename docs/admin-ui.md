@@ -225,7 +225,23 @@ URL:
 /admin/payments/
 ```
 
-Use this page to review payment records and recent payment logs. Payment records are not edited through the normal admin UI in V1.
+Manual add URL:
+
+```text
+/admin/payments/add/
+```
+
+Use `/admin/payments/` to review payment records and recent payment logs. The final card links to Add Payment for off-site camp tax payments.
+
+Add Payment creates a paid manual payment record. It supports:
+
+- Named-user selector.
+- Camp year selector.
+- Tax amount.
+- Available add-ons.
+- Optional note/reference.
+
+Manual payments use payment mode `manual`, store the creating admin as `created_by`, and do not have Stripe IDs. The form blocks duplicate paid user/year records and unexpired pending Stripe Checkout records.
 
 ## Stripe
 
@@ -235,7 +251,7 @@ URL:
 /admin/stripe/
 ```
 
-Use this page to see and switch Stripe test/live mode, inspect payment logs, and delete local test payments before going live.
+Use this page to see and switch Stripe test/live mode, inspect payment logs, and delete local Stripe test payments before going live. Test cleanup deletes `stripe_test` records only; manual payments are preserved.
 
 ## Media
 

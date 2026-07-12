@@ -94,6 +94,7 @@ Rules:
 - Default Stripe mode is `test`.
 - Stripe credentials stay in `/etc/thephage/thephage.toml`.
 - `/admin/stripe/` changes `stripe_mode`.
+- This setting controls future Stripe Checkout payments only. Individual payment records store their actual source in `Payment.mode`.
 
 ## CampYear
 
@@ -325,24 +326,26 @@ Rules:
 
 ## Payment
 
-Local payment attempt and final payment state.
+Local payment attempt and final payment state for Stripe Checkout payments and admin-created manual payments.
 
 | Field | Type | Notes |
 |---|---|---|
 | `user` | FK `User` | `PROTECT` |
 | `camp_year` | FK `CampYear` | `PROTECT` |
 | `status` | `CharField` | See statuses |
-| `stripe_mode` | `CharField` | `test` or `live` |
+| `mode` | `CharField` | `stripe_test`, `stripe_live`, or `manual` |
 | `tax_amount_cents` | `PositiveIntegerField` | Member-selected tax amount |
 | `add_on_amount_cents` | `PositiveIntegerField(default=0)` | Sum of add-ons |
-| `total_amount_cents` | `PositiveIntegerField` | Sent to Stripe |
+| `total_amount_cents` | `PositiveIntegerField` | Total payment amount |
 | `tax_tier_name_snapshot` | `CharField(max_length=120)` | Historical chosen tier |
 | `tax_tier_minimum_cents_snapshot` | `PositiveIntegerField` | Historical minimum |
-| `stripe_checkout_session_id` | `CharField(max_length=255, unique=True, null=True, blank=True)` | Stripe Checkout session |
-| `stripe_payment_intent_id` | `CharField(max_length=255, unique=True, null=True, blank=True)` | Stripe payment intent |
+| `stripe_checkout_session_id` | `CharField(max_length=255, unique=True, null=True, blank=True)` | Stripe Checkout session, blank for manual payments |
+| `stripe_payment_intent_id` | `CharField(max_length=255, unique=True, null=True, blank=True)` | Stripe payment intent, blank for manual payments |
 | `checkout_created_at` | `DateTimeField(null=True, blank=True)` | UTC |
 | `checkout_expires_at` | `DateTimeField(null=True, blank=True)` | UTC |
 | `paid_at` | `DateTimeField(null=True, blank=True)` | UTC |
+| `note` | `TextField(blank=True)` | Optional admin note/reference, primarily for manual payments |
+| `created_by` | FK `User`, nullable | Paying member for Stripe payments; admin for manual payments; `SET_NULL` |
 | `created_at` | `DateTimeField(auto_now_add=True)` | UTC |
 | `updated_at` | `DateTimeField(auto_now=True)` | UTC |
 
@@ -361,11 +364,17 @@ Rules:
 - Payment stores a snapshot of the chosen tier.
 - Tax amount must be at least the chosen tier minimum or applicable reduced override minimum.
 - Checkout return page does not mark payment paid.
-- Stripe webhook is the source of truth for `paid`.
+- Stripe webhook is the source of truth for Stripe Checkout payments becoming `paid`.
+- Stripe Checkout payments use `mode = "stripe_test"` or `mode = "stripe_live"`, mapped from `SiteSettings.stripe_mode` at checkout creation time.
+- Stripe Checkout payments set `created_by` to the paying member.
+- Manual payments use `mode = "manual"`, `status = "paid"`, `paid_at` set at creation, and `created_by` set to the admin who created the record.
+- Manual payments may include an admin note/reference in `note` and should create the same tax tier and add-on snapshots as Stripe payments.
+- Manual payments do not have Stripe Checkout Session IDs, Stripe Payment Intent IDs, or checkout expiration timestamps.
 - Only one `paid` payment is allowed per user per camp year.
 - Do not create a second Checkout Session for the same user/year while an existing local `created` payment is unexpired.
 - Failed, cancelled, refunded, and `requires_review` payments do not count as paid.
-- Test payments can be deleted through `/admin/stripe/`.
+- Test payments can be deleted through `/admin/stripe/` by matching `mode = "stripe_test"`.
+- Manual payments must not be deleted by test payment cleanup.
 - Live payments should not be deleted through normal admin workflows.
 
 Constraints and indexes:
@@ -377,7 +386,14 @@ Constraints and indexes:
 - `checkout_expires_at` should be set for Checkout-created payments.
 - Index `user`, `camp_year`.
 - Index `status`.
-- Index `stripe_mode`, `status`.
+- Index `mode`, `status`.
+
+Migration stance before launch:
+
+- Use a normal Django migration for the change from `stripe_mode` to `mode`, adding `manual`, `note`, and `created_by`.
+- Migrate existing payment values from `test` to `stripe_test` and `live` to `stripe_live`.
+- Backfill existing Stripe payment `created_by` to the payment user when practical.
+- This service is not released yet, so migrations can be squashed or rebuilt before launch if the test database is intentionally recreated. Until then, normal migrations keep local, CI, and the test system aligned.
 
 ## PaymentAddOn
 
@@ -406,7 +422,7 @@ Redacted Stripe/payment troubleshooting log.
 | `payment` | FK `Payment`, nullable | `SET_NULL` |
 | `level` | `CharField(max_length=20)` | `info`, `warning`, or `error` |
 | `event_type` | `CharField(max_length=120)` | App-defined |
-| `stripe_mode` | `CharField(max_length=10, blank=True)` | `test` or `live` |
+| `mode` | `CharField(max_length=20, blank=True)` | `stripe_test`, `stripe_live`, `manual`, or blank when unknown |
 | `stripe_event_id` | `CharField(max_length=255, blank=True)` | Webhook event ID |
 | `message` | `TextField(blank=True)` | Human-readable summary |
 | `redacted_payload` | `JSONField(null=True, blank=True)` | No secrets or card data |
@@ -419,6 +435,7 @@ Rules:
 - Logs never store card data.
 - Logs are for troubleshooting only.
 - Logs do not drive payment state.
+- Manual payment creation logs use `mode = "manual"` and an event type such as `manual_payment.create`.
 
 Indexes:
 

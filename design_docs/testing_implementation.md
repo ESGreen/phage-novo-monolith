@@ -250,7 +250,8 @@ Cover:
 - Checkout allowed when only expired `created` payments exist.
 - Checkout creates local payment.
 - Checkout stores `checkout_expires_at`.
-- Checkout stores Stripe mode.
+- Checkout stores payment mode as `stripe_test` or `stripe_live`.
+- Checkout stores `created_by` as the paying member.
 - Checkout creates add-on snapshots.
 - Checkout passes required metadata.
 - Checkout uses `payment_method_types = ["card"]`.
@@ -292,6 +293,7 @@ Cover each admin section:
 - `/admin/users/`.
 - `/admin/camp/`.
 - `/admin/payments/`.
+- `/admin/payments/add/`.
 - `/admin/stripe/`.
 - `/admin/pages/`.
 - `/admin/surveys/`.
@@ -305,6 +307,17 @@ For each section:
 - Admin can load page.
 - Admin can perform expected create/edit/delete actions.
 - Validation errors are shown clearly.
+
+Manual payment admin coverage:
+
+- Admin can create a manual paid payment.
+- Manual payment stores `mode = "manual"`.
+- Manual payment stores `created_by` as the admin.
+- Manual payment stores optional note.
+- Manual payment creates add-on snapshots and a payment log.
+- Duplicate paid user/year is rejected.
+- Unexpired pending Stripe checkout user/year is rejected.
+- Missing qualifying tax tier/override is rejected with a clear validation error.
 
 ## Management Command Tests
 

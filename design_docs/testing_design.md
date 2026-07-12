@@ -383,7 +383,7 @@ Automated tests should cover:
 - A member with an unexpired `created` payment for the same year cannot start another checkout.
 - A member with only expired `created` payments can start a new checkout.
 - Checkout creates a local payment attempt record.
-- Checkout stores Stripe mode, test or live, on the local payment record.
+- Checkout stores payment mode, `stripe_test` or `stripe_live`, on the local payment record.
 - Checkout stores the Stripe Checkout Session ID when Stripe returns it.
 - Checkout stores `checkout_expires_at`.
 - Checkout passes useful metadata to Stripe, including user ID, camp year, payment ID, and Stripe mode.
@@ -444,7 +444,10 @@ Automated tests should cover:
 - Payment records store camp year.
 - Payment records store amount in cents.
 - Payment records store status.
-- Payment records store Stripe mode.
+- Payment records store mode.
+- Payment records store optional note.
+- Stripe payment records store `created_by` as the paying member.
+- Manual payment records store `created_by` as the admin who created them.
 - Payment records store Stripe Checkout Session ID when available.
 - Payment records store Stripe Payment Intent ID when available.
 - Payment records store Checkout expiration when available.
@@ -472,18 +475,19 @@ Automated tests should cover:
 - Payment amount includes selected add-ons.
 - Unselected add-ons are not recorded on the payment.
 
-## Test Vs Live Stripe Mode Tests
+## Payment Mode And Stripe Mode Tests
 
-These tests verify that Stripe test and live modes are clearly separated while still using the same website workflow.
+These tests verify that Stripe test and live modes are clearly separated while still using the same website workflow, and that manual payments are a distinct non-Stripe mode.
 
 Production can be switched into Stripe test mode. Admins will use test mode in production to verify the full real workflow each year, then switch the site back to live mode after testing.
 
 Automated tests should cover:
 
-- The site has an explicit Stripe mode: `test` or `live`.
+- The site has an explicit Stripe setting: `test` or `live`.
+- Payments have an explicit mode: `stripe_test`, `stripe_live`, or `manual`.
 - Admins can switch the configured Stripe mode.
-- Stripe mode is stored on every payment record.
-- Stripe mode is stored on relevant payment log records.
+- Payment mode is stored on every payment record.
+- Payment mode is stored on relevant payment log records.
 - Test mode uses test Stripe configuration.
 - Live mode uses live Stripe configuration.
 - Checkout creation uses the currently configured Stripe mode.
@@ -496,6 +500,7 @@ Automated tests should cover:
 - `/admin/stripe/` allows deleting test payments.
 - Deleting test payments deletes related local payment add-ons and payment logs as appropriate.
 - Live payments cannot be deleted through the test-payment cleanup path.
+- Manual payments cannot be deleted through the test-payment cleanup path.
 - Member-facing pages do not expose special test/live UI.
 - The member tax payment workflow is the same in test mode and live mode.
 
@@ -590,12 +595,23 @@ Happy-path tests should cover:
 - Admin can view `requires_review` payments.
 - Admin can view selected add-ons.
 - Admin can view related Stripe/payment logs.
+- Admin can open `/admin/payments/add/`.
+- Admin can create a manual paid payment for off-site camp tax payment.
+- Manual payment creation stores `mode = "manual"`.
+- Manual payment creation stores the admin as `created_by`.
+- Manual payment creation stores an optional note/reference.
+- Manual payment creation creates add-on snapshots.
+- Manual payment creation creates a `manual_payment.create` payment log.
+- Manual payment creation chooses the greatest qualifying tax tier or effective override minimum less than or equal to the entered tax amount.
+- Manual payment creation blocks an existing paid payment for the same user/year.
+- Manual payment creation blocks an unexpired pending Stripe checkout for the same user/year.
+- Manual payment creation shows a validation error when no tax tier or override qualifies.
 
 Validation/error tests should cover:
 
 - Payment records cannot be edited into invalid amounts.
 - Payment status must be one of the allowed statuses.
-- Payment cannot be marked paid without enough Stripe/local data unless changed directly in database outside normal UI.
+- Payment cannot be marked paid without enough Stripe/local data unless it is created through the manual payment workflow or changed directly in database outside normal UI.
 - `requires_review` payments are visible but do not require a custom resolution workflow in V1.
 
 ### Pages Admin
@@ -913,6 +929,7 @@ This checklist is also maintained as the operational runbook `docs/pre-launch-ch
 - Confirm Stripe/payment logs exist.
 - Delete test payment from `/admin/stripe/`.
 - Confirm test member can repeat the test payment flow.
+- Confirm manual payments are not deleted by test payment cleanup.
 
 ### Stripe Live Mode
 
@@ -962,7 +979,7 @@ Do not add automated tests for:
 - Password reset by email.
 - Two-factor authentication.
 - Multi-currency payments.
-- Arbitrary donation/extra-payment flows.
+- Arbitrary donation/extra-payment flows outside camp tax payments.
 - Browser screenshot comparisons.
 - Detailed visual design.
 
@@ -982,7 +999,7 @@ V1 tests should stay focused on:
 - Stripe checkout.
 - Stripe webhooks.
 - Payment records.
-- Test/live Stripe mode.
+- Payment mode and test/live Stripe mode.
 - Deployment verification.
 
 ## Operational Docs

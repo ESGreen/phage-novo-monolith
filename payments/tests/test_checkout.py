@@ -81,7 +81,7 @@ def create_payment(
         user=user,
         camp_year=camp_year,
         status=status,
-        stripe_mode=Payment.StripeMode.TEST,
+        mode=Payment.Mode.STRIPE_TEST,
         tax_amount_cents=10000,
         add_on_amount_cents=0,
         total_amount_cents=10000,
@@ -114,7 +114,8 @@ def test_checkout_creates_payment_and_redirects_to_stripe(client, mocker) -> Non
     assert response["Location"] == "https://checkout.example/cs_test_123"
     payment = Payment.objects.get()
     assert payment.status == Payment.Status.CREATED
-    assert payment.stripe_mode == Payment.StripeMode.TEST
+    assert payment.mode == Payment.Mode.STRIPE_TEST
+    assert payment.created_by == user
     assert payment.tax_amount_cents == 12500
     assert payment.add_on_amount_cents == 2500
     assert payment.total_amount_cents == 15000

@@ -57,10 +57,18 @@
     const taxAmountCents = parseAmountCents(amountInput);
     const totalCents = taxAmountCents + addOnCents;
 
-    minimumDisplay.textContent = formatDollars(minimumCents);
-    amountDisplay.textContent = formatDollars(taxAmountCents);
-    addOnDisplay.textContent = formatDollars(addOnCents);
-    totalDisplay.textContent = formatDollars(totalCents);
+    if (minimumDisplay) {
+      minimumDisplay.textContent = formatDollars(minimumCents);
+    }
+    if (amountDisplay) {
+      amountDisplay.textContent = formatDollars(taxAmountCents);
+    }
+    if (addOnDisplay) {
+      addOnDisplay.textContent = formatDollars(addOnCents);
+    }
+    if (totalDisplay) {
+      totalDisplay.textContent = formatDollars(totalCents);
+    }
     if (zeroMessage) {
       zeroMessage.hidden = totalCents > 0;
     }

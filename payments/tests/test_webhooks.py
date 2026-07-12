@@ -31,7 +31,7 @@ def create_payment(
         user=user,
         camp_year=camp_year,
         status=status,
-        stripe_mode=Payment.StripeMode.TEST,
+        mode=Payment.Mode.STRIPE_TEST,
         tax_amount_cents=total_amount_cents,
         add_on_amount_cents=0,
         total_amount_cents=total_amount_cents,
@@ -61,7 +61,7 @@ def completed_event(payment: Payment, amount_total: int | None = None, currency:
                     "user_id": str(payment.user_id),
                     "camp_year_id": str(payment.camp_year_id),
                     "camp_year": str(payment.camp_year.year),
-                    "stripe_mode": payment.stripe_mode,
+                    "stripe_mode": Payment.stripe_mode_for_mode(payment.mode),
                 },
             }
         },

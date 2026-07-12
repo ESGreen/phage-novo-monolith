@@ -17,8 +17,10 @@
           <th>Tax</th>
           <th>Add-ons</th>
           <th>Total</th>
+          <th>Created by</th>
           <th>Created</th>
           <th>Paid</th>
+          <th>Note</th>
         </tr>
       </thead>
       <tbody>
@@ -27,12 +29,14 @@
           <td>{{ payment.user.email }}</td>
           <td>{{ payment.camp_year.year }}</td>
           <td>{{ payment.get_status_display }}</td>
-          <td>{{ payment.get_stripe_mode_display }}</td>
+          <td>{{ payment.get_mode_display }}</td>
           <td>{{ payment.tax_amount_cents|cents }}</td>
           <td>{{ payment.add_on_amount_cents|cents }}</td>
           <td>{{ payment.total_amount_cents|cents }}</td>
+          <td>{% if payment.created_by %}{{ payment.created_by.email }}{% else %}----{% endif %}</td>
           <td>{{ payment.created_at|date:"Y-m-d H:i:s" }}</td>
           <td>{% if payment.paid_at %}{{ payment.paid_at|date:"Y-m-d H:i:s" }}{% else %}----{% endif %}</td>
+          <td>{{ payment.note|default:"----" }}</td>
         </tr>
       {% endfor %}
       </tbody>
@@ -65,7 +69,7 @@
           <td>{{ log.event_type }}</td>
           <td>{% if log.payment %}{{ log.payment.user.email }}{% else %}----{% endif %}</td>
           <td>{% if log.payment %}{{ log.payment.id }}{% else %}----{% endif %}</td>
-          <td>{{ log.stripe_mode|default:"----" }}</td>
+          <td>{{ log.mode|default:"----" }}</td>
           <td>{{ log.message|default:"----" }}</td>
         </tr>
       {% endfor %}
@@ -74,5 +78,11 @@
     {% else %}
       <p>No payment logs recorded.</p>
     {% endif %}
+  </section>
+
+  <section class="content-card">
+    <h2>Add Payment</h2>
+    <p>Create a paid record for an off-site camp tax payment.</p>
+    <p><a class="secondary-button" href="{% url 'adminui:payment-add' %}">Add Payment</a></p>
   </section>
 {% endblock %}

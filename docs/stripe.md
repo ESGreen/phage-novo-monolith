@@ -52,7 +52,8 @@ Use this when:
 - Test/live mode should not appear as a special workflow on member-facing pages.
 - Production may run in Stripe test mode when admins are testing the yearly payment flow.
 - Only one successful payment is allowed per user per camp year.
-- Extra or unusual payments are handled outside the website.
+- Off-site camp tax payments can be entered manually by admins in `/admin/payments/add/`.
+- Arbitrary extra payments and donations outside camp taxes are handled outside the website.
 
 ## Admin Pages
 
@@ -66,6 +67,12 @@ Payment review happens in:
 
 ```text
 /admin/payments/
+```
+
+Manual off-site camp tax payments are added in:
+
+```text
+/admin/payments/add/
 ```
 
 ## Stripe Modes
@@ -222,13 +229,15 @@ Test payments should be deletable from:
 /admin/stripe/
 ```
 
-Deleting test payments should delete:
+Deleting test payments should delete local `stripe_test` payments only:
 
-- Local test payment records.
+- Local Stripe test payment records.
 - Related local test payment add-ons.
 - Related local test payment logs, as appropriate.
 
 Deleting test payments should not delete live payments.
+
+Deleting test payments should not delete manual payments.
 
 After deleting test payments, the test user should be able to repeat the test payment flow.
 
@@ -286,6 +295,16 @@ Each checkout attempt creates a local payment record.
 
 Checkout-created payment records store a Checkout expiration timestamp so the site can avoid creating duplicate open checkout sessions for the same user/year.
 
+Payment records have a mode:
+
+- `stripe_test`
+- `stripe_live`
+- `manual`
+
+The site Stripe setting remains `test` or `live`; Stripe Checkout records map that setting to `stripe_test` or `stripe_live` when the local payment is created.
+
+Manual payments are paid records created by an admin for off-site camp tax payments. They store the creating admin, optional note/reference, tax and add-on snapshots, and no Stripe IDs.
+
 Payment statuses:
 
 - `created`
@@ -322,6 +341,7 @@ The site should log useful Stripe-related traffic, including:
 - Webhook signature validation.
 - Webhook processing result.
 - Internal payment state changes.
+- Manual payment creation.
 
 Logs should not store:
 
@@ -460,6 +480,7 @@ If wrong:
 - Review recent payment activity.
 - Confirm no live payment was made in error.
 - Confirm no test payment is being treated as live.
+- Confirm manual payments are not being treated as Stripe payments.
 
 ## Annual Stripe Checklist
 
@@ -480,7 +501,7 @@ Before opening taxes:
 
 The website does not handle:
 
-- Arbitrary extra payments.
+- Arbitrary extra payments outside camp taxes.
 - Donations outside camp taxes.
 - Multiple successful payments per user/year.
 - Complex refund workflows.

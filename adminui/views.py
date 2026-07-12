@@ -12,6 +12,7 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from accounts.forms import ProfileBioForm, ProfilePhotoForm
@@ -21,7 +22,7 @@ from camp.models import CampYear, TaxAddOn, TaxOverride, TaxTier
 from camp.services import get_current_camp_year
 from content.models import ContentPage, MediaItem, Menu, MenuItem
 from core.models import SiteSettings
-from payments.models import Payment, PaymentLog
+from payments.models import Payment, PaymentAddOn, PaymentLog
 from surveys.forms import (
     SurveyAdminForm,
     SurveyChoiceCreateForm,
@@ -49,6 +50,7 @@ from .forms import (
     CampYearCreateForm,
     CampYearDashboardSetupForm,
     ContentPageForm,
+    ManualPaymentCreateForm,
     MediaUploadAdminForm,
     MenuForm,
     MenuItemForm,
@@ -388,8 +390,60 @@ def payments(request: HttpRequest) -> HttpResponse:
         request,
         "adminui/payments.html",
         {
-            "payments": Payment.objects.select_related("user", "camp_year"),
+            "payments": Payment.objects.select_related("user", "camp_year", "created_by"),
             "logs": PaymentLog.objects.select_related("payment", "payment__user")[:50],
+        },
+    )
+
+
+@admin_required
+def payment_add(request: HttpRequest) -> HttpResponse:
+    form = ManualPaymentCreateForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            payment = Payment.objects.create(
+                user=form.cleaned_data["user"],
+                camp_year=form.cleaned_data["camp_year"],
+                status=Payment.Status.PAID,
+                mode=Payment.Mode.MANUAL,
+                tax_amount_cents=form.cleaned_data["tax_amount_cents"],
+                add_on_amount_cents=form.cleaned_data["add_on_amount_cents"],
+                total_amount_cents=form.cleaned_data["total_amount_cents"],
+                tax_tier_name_snapshot=form.cleaned_data["tax_tier_name_snapshot"],
+                tax_tier_minimum_cents_snapshot=form.cleaned_data[
+                    "effective_minimum_cents"
+                ],
+                paid_at=timezone.now(),
+                note=form.cleaned_data["note"],
+                created_by=request.user,
+            )
+            for add_on in form.cleaned_data.get("add_ons") or []:
+                PaymentAddOn.objects.create(
+                    payment=payment,
+                    tax_add_on=add_on,
+                    name_snapshot=add_on.name,
+                    amount_cents_snapshot=add_on.amount_cents,
+                )
+            message = f"Manual payment created by {request.user.email}."
+            note = form.cleaned_data["note"].strip()
+            if note:
+                message = f"{message} Note/reference: {note}"
+            PaymentLog.objects.create(
+                payment=payment,
+                level=PaymentLog.Level.INFO,
+                event_type="manual_payment.create",
+                mode=Payment.Mode.MANUAL,
+                message=message,
+            )
+        messages.success(request, "Manual payment added.")
+        return redirect("adminui:payments")
+
+    return render(
+        request,
+        "adminui/payment_add.html",
+        {
+            "available_add_ons": form.fields["add_ons"].queryset,
+            "form": form,
         },
     )
 
@@ -408,7 +462,7 @@ def stripe(request: HttpRequest) -> HttpResponse:
             messages.success(request, "Stripe mode switched.")
             return redirect("adminui:stripe")
         if action == "delete_test_payments" and request.POST.get("confirm") == "delete":
-            test_payments = Payment.objects.filter(stripe_mode=Payment.StripeMode.TEST)
+            test_payments = Payment.objects.filter(mode=Payment.Mode.STRIPE_TEST)
             count = test_payments.count()
             PaymentLog.objects.filter(payment__in=test_payments).delete()
             test_payments.delete()
@@ -422,7 +476,7 @@ def stripe(request: HttpRequest) -> HttpResponse:
             "site_settings": site_settings,
             "logs": PaymentLog.objects.all()[:50],
             "test_payment_count": Payment.objects.filter(
-                stripe_mode=Payment.StripeMode.TEST,
+                mode=Payment.Mode.STRIPE_TEST,
             ).count(),
         },
     )

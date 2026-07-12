@@ -15,16 +15,17 @@ class Payment(models.Model):
         REFUNDED = "refunded", "Refunded"
         REQUIRES_REVIEW = "requires_review", "Requires review"
 
-    class StripeMode(models.TextChoices):
-        TEST = "test", "Test"
-        LIVE = "live", "Live"
+    class Mode(models.TextChoices):
+        STRIPE_TEST = "stripe_test", "Stripe test"
+        STRIPE_LIVE = "stripe_live", "Stripe live"
+        MANUAL = "manual", "Manual"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     camp_year = models.ForeignKey(
         "camp.CampYear", on_delete=models.PROTECT, related_name="payments"
     )
     status = models.CharField(max_length=30, choices=Status.choices, default=Status.CREATED)
-    stripe_mode = models.CharField(max_length=10, choices=StripeMode.choices)
+    mode = models.CharField(max_length=20, choices=Mode.choices)
     tax_amount_cents = models.PositiveIntegerField()
     add_on_amount_cents = models.PositiveIntegerField(default=0)
     total_amount_cents = models.PositiveIntegerField()
@@ -37,6 +38,14 @@ class Payment(models.Model):
     checkout_created_at = models.DateTimeField(null=True, blank=True)
     checkout_expires_at = models.DateTimeField(null=True, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
+    note = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="created_payments",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -44,7 +53,7 @@ class Payment(models.Model):
         indexes = [
             models.Index(fields=["user", "camp_year"]),
             models.Index(fields=["status"]),
-            models.Index(fields=["stripe_mode", "status"]),
+            models.Index(fields=["mode", "status"]),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -64,6 +73,22 @@ class Payment(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} {self.camp_year} {self.status}"
+
+    @classmethod
+    def mode_for_stripe_mode(cls, stripe_mode: str) -> str:
+        if stripe_mode == "live":
+            return cls.Mode.STRIPE_LIVE
+        if stripe_mode == "test":
+            return cls.Mode.STRIPE_TEST
+        raise ValueError("Unknown Stripe mode.")
+
+    @classmethod
+    def stripe_mode_for_mode(cls, mode: str) -> str:
+        if mode == cls.Mode.STRIPE_LIVE:
+            return "live"
+        if mode == cls.Mode.STRIPE_TEST:
+            return "test"
+        raise ValueError("Manual payments do not have a Stripe mode.")
 
     def blocks_new_checkout(self) -> bool:
         return (
@@ -101,7 +126,7 @@ class PaymentLog(models.Model):
     )
     level = models.CharField(max_length=20, choices=Level.choices)
     event_type = models.CharField(max_length=120)
-    stripe_mode = models.CharField(max_length=10, blank=True)
+    mode = models.CharField(max_length=20, blank=True)
     stripe_event_id = models.CharField(max_length=255, blank=True)
     message = models.TextField(blank=True)
     redacted_payload = models.JSONField(null=True, blank=True)
