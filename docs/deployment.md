@@ -45,6 +45,12 @@ Web file roots:
 /var/www/thephage/media
 ```
 
+The application checkout under `/opt/thephage/app` is not the web root. Nginx serves only selected file roots under `/var/www/thephage`:
+
+- `/opt/thephage/app/public/` is source content copied to `/var/www/thephage/public/`.
+- `/opt/thephage/app/static/` is source content collected by Django into `/var/www/thephage/static/`.
+- Uploaded files are written directly to `/var/www/thephage/media/` through Django's media storage.
+
 Runtime and backup paths:
 
 ```text
@@ -59,7 +65,7 @@ Install these packages on Ubuntu 24.04 LTS:
 
 ```bash
 sudo apt update
-sudo apt install python3 python3-venv python3-pip postgresql postgresql-contrib nginx certbot python3-certbot-nginx awscli
+sudo apt install python3 python3-venv python3-pip postgresql postgresql-contrib nginx certbot python3-certbot-nginx awscli rsync
 ```
 
 Optional operational packages:
@@ -547,15 +553,16 @@ High-level deployment sequence:
 7. Deploy code to `/opt/thephage/app`.
 8. Create/update virtualenv and install dependencies.
 9. Run Django checks and migrations.
-10. Collect static files.
-11. Create first admin if needed.
-12. Install/update `thephage.service`.
-13. Install/update Nginx site config.
-14. Start/restart the app service.
-15. Reload Nginx.
-16. Run certbot for TLS if this is the first deployment.
-17. Install/update backup scripts and timer.
-18. Run deployment verification checks.
+10. Sync public files.
+11. Collect Django static files.
+12. Create first admin if needed.
+13. Install/update `thephage.service`.
+14. Install/update Nginx site config.
+15. Start/restart the app service.
+16. Reload Nginx.
+17. Run certbot for TLS if this is the first deployment.
+18. Install/update backup scripts and timer.
+19. Run deployment verification checks.
 
 Representative commands after code is deployed:
 
@@ -563,6 +570,7 @@ Representative commands after code is deployed:
 sudo -u phage /opt/thephage/venv/bin/pip install -r /opt/thephage/app/requirements.txt
 sudo -u phage THEPHAGE_CONFIG=/etc/thephage/thephage.toml /opt/thephage/venv/bin/python /opt/thephage/app/manage.py check
 sudo -u phage THEPHAGE_CONFIG=/etc/thephage/thephage.toml /opt/thephage/venv/bin/python /opt/thephage/app/manage.py migrate
+sudo -u phage rsync -a --delete /opt/thephage/app/public/ /var/www/thephage/public/
 sudo -u phage THEPHAGE_CONFIG=/etc/thephage/thephage.toml /opt/thephage/venv/bin/python /opt/thephage/app/manage.py collectstatic --noinput
 sudo systemctl restart thephage.service
 sudo nginx -t
