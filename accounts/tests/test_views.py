@@ -116,6 +116,29 @@ def test_profile_page_renders_for_member(client) -> None:
     assert b"Change Password" in response.content
 
 
+def test_member_nav_hides_admin_link_for_member(client) -> None:
+    user = create_user()
+    client.force_login(user)
+
+    response = client.get("/profile/")
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert 'href="/admin/"' not in body
+
+
+def test_member_nav_shows_admin_link_before_logout_for_admin(client) -> None:
+    user = create_user(email="admin@example.com", is_admin=True)
+    client.force_login(user)
+
+    response = client.get("/profile/")
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert 'href="/admin/"' in body
+    assert body.index('href="/admin/"') < body.index('action="/logout/"')
+
+
 def test_logout_redirects_to_public_site(client) -> None:
     user = create_user()
     client.force_login(user)

@@ -16,6 +16,9 @@
           <a class="nav-link" href="{% url 'camp:phagebook-current' %}">Phage Book</a>
           <a class="nav-link" href="{% url 'accounts:profile' %}">Profile</a>
         {% endfor %}
+        {% if request.user.is_admin %}
+          <a class="nav-link" href="{% url 'adminui:home' %}">Admin</a>
+        {% endif %}
         <form class="logout-form" method="post" action="{% url 'accounts:logout' %}">
           {% csrf_token %}
           <button class="nav-link-button" type="submit">Logout</button>
