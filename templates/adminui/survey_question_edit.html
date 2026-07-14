@@ -1,4 +1,5 @@
 {% extends "admin_base.html" %}
+{% load static %}
 
 {% block title %}Edit Question: {{ question.name }} - The Phage{% endblock %}
 
@@ -10,9 +11,8 @@
 
   <section id="question-details" class="content-card">
     <h2>Question Details</h2>
-    <form id="question-detail-form-{{ question.id }}" method="post" action="{% url 'adminui:survey-question-edit' survey.slug question.id %}#question-details" novalidate>
+    <form id="{{ question_form_id }}" method="post" action="{% url 'adminui:survey-question-edit' survey.slug question.id %}#question-details" novalidate>
       {% csrf_token %}
-      <input type="hidden" name="action" value="update_question">
     </form>
     {{ question_form.non_field_errors }}
     {{ option_form.non_field_errors }}
@@ -48,8 +48,15 @@
         {{ option_form.other_label.errors }}
       </div>
     {% endif %}
-    <button type="submit" form="question-detail-form-{{ question.id }}">Update Question</button>
+    <button type="submit" name="action" value="update_question" form="{{ question_form_id }}">Update Question</button>
   </section>
+
+  {% if question.is_choice_based %}
+    <section id="choices" class="content-card">
+      <h2>Choices</h2>
+      {% include "adminui/_survey_choice_editor.html" %}
+    </section>
+  {% endif %}
 
   <section id="conditional" class="content-card">
     <h2>Conditional</h2>
@@ -71,12 +78,22 @@
       </div>
       <div class="form-row">
         {{ condition_form.visible_if_choices.label_tag }}
-        {{ condition_form.visible_if_choices }}
+        <div class="condition-choice-list" data-condition-choice-list data-choice-name="{{ condition_form.visible_if_choices.html_name }}" data-empty-text="Select a controlling question to choose choices." data-no-choices-text="No choices are configured for this controlling question.">
+          {% for widget in condition_form.visible_if_choices %}
+            <label class="condition-choice-option" for="{{ widget.id_for_label }}">
+              {{ widget.tag }}
+              <span>{{ widget.choice_label }}</span>
+            </label>
+          {% empty %}
+            <p class="help-text">Select a controlling question to choose choices.</p>
+          {% endfor %}
+        </div>
         {{ condition_form.visible_if_choices.errors }}
       </div>
       <button type="submit">Update Conditions</button>
     </form>
   </section>
+  {{ condition_choice_cache|json_script:"condition-choice-cache" }}
 
   <section class="content-card danger-card">
     <h2>Delete Question</h2>
@@ -87,4 +104,8 @@
       <button type="submit" class="danger-button">Delete Question</button>
     </form>
   </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/admin-surveys.js' %}" defer></script>
 {% endblock %}

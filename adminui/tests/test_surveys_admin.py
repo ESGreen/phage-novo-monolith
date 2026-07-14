@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
+import re
+
 import pytest
 from django.contrib.auth import get_user_model
 
-from surveys.models import Survey, SurveyAnswer, SurveyChoice, SurveyQuestion
+from surveys.models import Survey, SurveyAnswer, SurveyChoice, SurveyQuestion, SurveyResponse
 from surveys.question_types import (
     QUESTION_TYPE_MULTI_CHOICE,
     QUESTION_TYPE_SINGLE_CHOICE,
@@ -51,6 +54,15 @@ def create_question(
 
 def create_choice(question: SurveyQuestion, label: str, display_order: int = 1) -> SurveyChoice:
     return SurveyChoice.objects.create(question=question, label=label, display_order=display_order)
+
+
+def json_script_data(body: str, element_id: str) -> object:
+    match = re.search(
+        rf'<script id="{element_id}" type="application/json">(.*?)</script>',
+        body,
+    )
+    assert match is not None
+    return json.loads(match.group(1))
 
 
 class FakePost:
@@ -211,10 +223,22 @@ def test_admin_can_create_questions_with_default_hints_and_question_cards(client
 
     response = client.get("/admin/surveys/arrival-survey/")
     body = response.content.decode()
+    text_question = SurveyQuestion.objects.get(name=QUESTION_TYPE_TEXT)
     assert "Redirect after submission" in body
     assert "Leave blank to show /survey/arrival-survey/complete/ after submission." in body
     assert "Question: text" in body
     assert "Create Choice" in body
+    assert 'value="duplicate_question"' in body
+    assert (
+        f'id="question-{text_question.id}" class="content-card" data-survey-question-card'
+        in body
+    )
+    assert 'class="collapsible-card-toggle"' in body
+    assert f'aria-controls="question-{text_question.id}-body"' in body
+    assert 'aria-expanded="true"' in body
+    assert f'id="question-{text_question.id}-body" data-collapsible-body' in body
+    assert "▾" in body
+    assert 'src="/static/js/admin-surveys.js"' in body
     assert survey.questions.count() == 3
 
 
@@ -258,6 +282,109 @@ def test_question_update_edit_and_move_actions_save_dirty_fields(client) -> None
     assert response["Location"] == f"/admin/surveys/arrival-survey/{second.id}/"
     second.refresh_from_db()
     assert second.name == "Edited Before Detail"
+
+
+def test_question_duplicate_copies_question_choices_and_conditions_after_source(client) -> None:
+    admin = create_user()
+    member = create_user("member@example.com", is_admin=False)
+    survey = create_survey()
+    parent = create_question(
+        survey,
+        "Color",
+        QUESTION_TYPE_SINGLE_CHOICE,
+        RENDER_HINT_RADIO,
+        display_order=1,
+    )
+    parent_choice = create_choice(parent, "Green")
+    source = create_question(
+        survey,
+        "Reason",
+        QUESTION_TYPE_SINGLE_CHOICE,
+        RENDER_HINT_RADIO,
+        display_order=2,
+    )
+    source.description_markdown = "Original description"
+    source.is_required = True
+    source.allows_other = True
+    source.other_label = "Something else"
+    source.save(
+        update_fields=[
+            "description_markdown",
+            "is_required",
+            "allows_other",
+            "other_label",
+            "updated_at",
+        ]
+    )
+    SurveyChoice.objects.create(question=source, label="Yes", value="yes", display_order=1)
+    SurveyChoice.objects.create(question=source, label="No", value="no", display_order=2)
+    replace_conditions(source, parent, [parent_choice])
+    later = create_question(survey, "Later", display_order=3)
+    response = SurveyResponse.objects.create(survey=survey, user=member)
+    SurveyAnswer.objects.create(
+        response=response,
+        question=source,
+        question_id_snapshot=source.id,
+        question_name_snapshot=source.name,
+        question_type_snapshot=source.question_type,
+        render_hint_snapshot=source.render_hint,
+        value='["Saved"]',
+    )
+    client.force_login(admin)
+
+    duplicate_response = client.post(
+        "/admin/surveys/arrival-survey/",
+        {
+            "action": "duplicate_question",
+            "question_id": source.id,
+            "name": "Reason updated",
+            "description_markdown": "Updated description",
+            "render_hint": RENDER_HINT_RADIO,
+            "is_required": "on",
+            "allows_other": "on",
+            "other_label": "A different answer",
+        },
+    )
+
+    source.refresh_from_db()
+    duplicate = SurveyQuestion.objects.get(name="Reason updated copy")
+    later.refresh_from_db()
+    assert duplicate_response.status_code == 302
+    assert duplicate_response["Location"] == (
+        f"/admin/surveys/arrival-survey/#question-{duplicate.id}"
+    )
+    assert source.name == "Reason updated"
+    assert duplicate.description_markdown == "Updated description"
+    assert duplicate.question_type == source.question_type
+    assert duplicate.render_hint == source.render_hint
+    assert duplicate.is_required is True
+    assert duplicate.allows_other is True
+    assert duplicate.other_label == "A different answer"
+    ordered_names = list(
+        survey.questions.order_by("display_order", "id").values_list("name", flat=True)
+    )
+    assert ordered_names == [
+        "Color",
+        "Reason updated",
+        "Reason updated copy",
+        "Later",
+    ]
+    assert list(
+        survey.questions.order_by("display_order", "id").values_list("display_order", flat=True)
+    ) == [1, 2, 3, 4]
+    assert later.display_order == 4
+    assert list(
+        duplicate.choices.order_by("display_order", "id").values_list(
+            "label",
+            "value",
+            "display_order",
+        )
+    ) == [("Yes", "yes", 1), ("No", "no", 2)]
+    assert list(
+        duplicate.conditions.values_list("depends_on_question_id", "visible_if_choice_id")
+    ) == [(parent.id, parent_choice.id)]
+    assert SurveyAnswer.objects.filter(question=source).count() == 1
+    assert not SurveyAnswer.objects.filter(question=duplicate).exists()
 
 
 def test_choice_create_update_move_delete_and_other_options(client) -> None:
@@ -310,6 +437,21 @@ def test_choice_create_update_move_delete_and_other_options(client) -> None:
     assert response.status_code == 302
     assert list(question.choices.values_list("label", flat=True)) == ["Blue", "Pink"]
 
+    response = client.get("/admin/surveys/arrival-survey/")
+    body = response.content.decode()
+    row_start = body.index(f'id="choice-form-{choice.id}"')
+    choice_row = body[row_start : body.index("</tr>", row_start)]
+    assert "<th>Label</th>" in body
+    assert "<th>Value</th>" in body
+    assert "<th>Update</th>" in body
+    assert "Label And Value" not in body
+    assert f'form="choice-form-{choice.id}"' in choice_row
+    assert f'id="id_choice_{choice.id}_label"' in choice_row
+    assert f'id="id_choice_{choice.id}_value"' in choice_row
+    assert 'aria-label="Choice label"' in choice_row
+    assert 'aria-label="Choice value"' in choice_row
+    assert "<label" not in choice_row
+
     response = client.post(
         "/admin/surveys/arrival-survey/",
         {
@@ -329,6 +471,95 @@ def test_choice_create_update_move_delete_and_other_options(client) -> None:
 
     response = client.post(
         "/admin/surveys/arrival-survey/",
+        {"action": "delete_choice", "choice_id": second.id},
+    )
+    assert response.status_code == 302
+    assert not SurveyChoice.objects.filter(pk=second.pk).exists()
+
+
+def test_question_detail_renders_choices_for_choice_questions_only(client) -> None:
+    admin = create_user()
+    survey = create_survey()
+    choice_question = create_question(
+        survey,
+        "Color",
+        QUESTION_TYPE_SINGLE_CHOICE,
+        RENDER_HINT_RADIO,
+    )
+    choice = create_choice(choice_question, "Green")
+    text_question = create_question(survey, "Name", display_order=2)
+    client.force_login(admin)
+
+    response = client.get(f"/admin/surveys/arrival-survey/{choice_question.id}/")
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert 'id="choices"' in body
+    assert "Create Choice" in body
+    assert "<th>Label</th>" in body
+    assert "<th>Value</th>" in body
+    assert f'id="choice-form-{choice.id}"' in body
+    assert f'formaction="/admin/surveys/arrival-survey/{choice_question.id}/#choices"' in body
+
+    response = client.get(f"/admin/surveys/arrival-survey/{text_question.id}/")
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert 'id="choices"' not in body
+    assert "Create Choice" not in body
+
+
+def test_question_detail_choice_create_update_move_delete(client) -> None:
+    admin = create_user()
+    survey = create_survey()
+    question = create_question(
+        survey,
+        "Color",
+        QUESTION_TYPE_SINGLE_CHOICE,
+        RENDER_HINT_RADIO,
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        f"/admin/surveys/arrival-survey/{question.id}/",
+        {
+            "action": "create_choice",
+            "name": "Updated Color",
+            "description_markdown": "Pick one.",
+            "render_hint": RENDER_HINT_RADIO,
+            "label": "Green",
+            "value": "green",
+        },
+    )
+
+    choice = SurveyChoice.objects.get()
+    assert response.status_code == 302
+    assert response["Location"] == f"/admin/surveys/arrival-survey/{question.id}/#choices"
+    assert choice.label == "Green"
+    assert choice.display_order == 1
+    question.refresh_from_db()
+    assert question.name == "Updated Color"
+    assert question.description_markdown == "Pick one."
+
+    response = client.post(
+        f"/admin/surveys/arrival-survey/{question.id}/",
+        {"action": "update_choice", "choice_id": choice.id, "label": "Pink", "value": "pink"},
+    )
+    assert response.status_code == 302
+    assert response["Location"] == f"/admin/surveys/arrival-survey/{question.id}/#choices"
+    choice.refresh_from_db()
+    assert choice.label == "Pink"
+
+    second = create_choice(question, "Blue", display_order=2)
+    response = client.post(
+        f"/admin/surveys/arrival-survey/{question.id}/",
+        {"action": "choice_move_up", "choice_id": second.id},
+    )
+    assert response.status_code == 302
+    assert list(question.choices.values_list("label", flat=True)) == ["Blue", "Pink"]
+
+    response = client.post(
+        f"/admin/surveys/arrival-survey/{question.id}/",
         {"action": "delete_choice", "choice_id": second.id},
     )
     assert response.status_code == 302
@@ -390,6 +621,42 @@ def test_choice_delete_used_by_condition_is_rejected(client) -> None:
     assert response.status_code == 200
     assert SurveyChoice.objects.filter(pk=choice.pk).exists()
     assert b"Choice is used by a condition" in response.content
+
+
+def test_question_detail_caches_condition_choices_for_selected_parent(client) -> None:
+    admin = create_user()
+    survey = create_survey()
+    parent = create_question(
+        survey,
+        "Color",
+        QUESTION_TYPE_SINGLE_CHOICE,
+        RENDER_HINT_RADIO,
+        display_order=1,
+    )
+    green = create_choice(parent, "Green")
+    blue = create_choice(parent, "Blue", display_order=2)
+    child = create_question(survey, "Why", display_order=2)
+    replace_conditions(child, parent, [blue])
+    client.force_login(admin)
+
+    response = client.get(f"/admin/surveys/arrival-survey/{child.id}/")
+    body = response.content.decode()
+    cache = json_script_data(body, "condition-choice-cache")
+    list_start = body.index('data-condition-choice-list')
+    choice_list = body[list_start : body.index("</div>", list_start)]
+
+    assert response.status_code == 200
+    assert cache[str(parent.id)] == [
+        {"id": str(green.id), "label": "Green"},
+        {"id": str(blue.id), "label": "Blue"},
+    ]
+    assert 'data-condition-parent=""' in body
+    assert 'data-choice-name="visible_if_choices"' in body
+    assert 'src="/static/js/admin-surveys.js"' in body
+    assert 'class="condition-choice-option"' in choice_list
+    assert choice_list.index('type="checkbox"') < choice_list.index("Green")
+    assert f'value="{blue.id}"' in choice_list
+    assert "checked" in choice_list[choice_list.index(f'value="{blue.id}"') :]
 
 
 def test_question_detail_conditions_create_replace_clear_and_reject_cycles(client) -> None:

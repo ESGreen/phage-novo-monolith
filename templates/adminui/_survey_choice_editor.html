@@ -1,0 +1,86 @@
+<h3>Create Choice</h3>
+<div class="choice-inline-form">
+  {{ choice_create_form.non_field_errors }}
+  <div class="form-row">
+    {{ choice_create_form.label.label_tag }}
+    {{ choice_create_form.label }}
+    {{ choice_create_form.label.errors }}
+  </div>
+  <div class="form-row">
+    {{ choice_create_form.value.label_tag }}
+    {{ choice_create_form.value }}
+    {{ choice_create_form.value.errors }}
+  </div>
+  <button type="submit" name="action" value="create_choice" form="{{ choice_form_id }}" formaction="{{ choice_action_url }}" class="secondary-button">Create Choice</button>
+</div>
+
+{% if choices %}
+  <table class="choice-table">
+    <thead>
+      <tr>
+        <th>Label</th>
+        <th>Value</th>
+        <th>Update</th>
+        <th>Order</th>
+        <th>Delete</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for choice_card in choices %}
+      <tr>
+        <td>
+          <form id="{{ choice_card.form_id }}" method="post" action="{{ choice_action_url }}" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_choice">
+            <input type="hidden" name="choice_id" value="{{ choice_card.choice.id }}">
+          </form>
+          {{ choice_card.form.non_field_errors }}
+          <div class="form-row choice-table-field">
+            {{ choice_card.form.label }}
+            {{ choice_card.form.label.errors }}
+          </div>
+        </td>
+        <td>
+          <div class="form-row choice-table-field">
+            {{ choice_card.form.value }}
+            {{ choice_card.form.value.errors }}
+          </div>
+        </td>
+        <td>
+          <button type="submit" class="secondary-button" form="{{ choice_card.form_id }}">Update Choice</button>
+        </td>
+        <td>
+          <div class="order-actions">
+            {% if not forloop.first %}
+              <form class="inline-form" method="post" action="{{ choice_action_url }}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="choice_move_up">
+                <input type="hidden" name="choice_id" value="{{ choice_card.choice.id }}">
+                <button type="submit" class="secondary-button icon-button" aria-label="Move choice up" title="Move up">▲</button>
+              </form>
+            {% endif %}
+            {% if not forloop.last %}
+              <form class="inline-form" method="post" action="{{ choice_action_url }}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="choice_move_down">
+                <input type="hidden" name="choice_id" value="{{ choice_card.choice.id }}">
+                <button type="submit" class="secondary-button icon-button" aria-label="Move choice down" title="Move down">▼</button>
+              </form>
+            {% endif %}
+          </div>
+        </td>
+        <td>
+          <form class="inline-form" method="post" action="{{ choice_action_url }}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete_choice">
+            <input type="hidden" name="choice_id" value="{{ choice_card.choice.id }}">
+            <button type="submit" class="danger-button">Delete</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p>No choices configured.</p>
+{% endif %}

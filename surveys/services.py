@@ -160,6 +160,60 @@ def next_choice_order(question: SurveyQuestion) -> int:
     return (max_order or 0) + 1
 
 
+def duplicate_question(question: SurveyQuestion) -> SurveyQuestion:
+    with transaction.atomic():
+        questions = list(
+            SurveyQuestion.objects.select_for_update()
+            .filter(survey=question.survey)
+            .order_by("display_order", "id")
+        )
+        source = next(item for item in questions if item.id == question.id)
+        source_index = questions.index(source)
+        duplicate = SurveyQuestion.objects.create(
+            survey=source.survey,
+            name=f"{source.name[:245]} copy",
+            description_markdown=source.description_markdown,
+            question_type=source.question_type,
+            render_hint=source.render_hint,
+            is_required=source.is_required,
+            allows_other=source.allows_other,
+            other_label=source.other_label,
+            display_order=source.display_order + 1,
+        )
+        SurveyChoice.objects.bulk_create(
+            [
+                SurveyChoice(
+                    question=duplicate,
+                    label=choice.label,
+                    value=choice.value,
+                    display_order=choice.display_order,
+                )
+                for choice in source.choices.order_by("display_order", "id")
+            ]
+        )
+        SurveyQuestionCondition.objects.bulk_create(
+            [
+                SurveyQuestionCondition(
+                    question=duplicate,
+                    depends_on_question_id=condition.depends_on_question_id,
+                    visible_if_choice_id=condition.visible_if_choice_id,
+                )
+                for condition in source.conditions.order_by("id")
+            ]
+        )
+
+        ordered_questions = [
+            *questions[: source_index + 1],
+            duplicate,
+            *questions[source_index + 1 :],
+        ]
+        for display_order, ordered_question in enumerate(ordered_questions, start=1):
+            if ordered_question.display_order != display_order:
+                ordered_question.display_order = display_order
+                ordered_question.save(update_fields=["display_order", "updated_at"])
+    return duplicate
+
+
 def move_question(question: SurveyQuestion, direction: str) -> None:
     with transaction.atomic():
         questions = list(

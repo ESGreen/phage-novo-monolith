@@ -147,6 +147,7 @@ class SurveyConditionForm(forms.Form):
                 [condition.visible_if_choice for condition in self.current_conditions],
             )
         super().__init__(*args, initial=initial, **kwargs)
+        self.fields["depends_on_question"].widget.attrs["data-condition-parent"] = ""
         self.fields["depends_on_question"].queryset = self._eligible_questions()
         selected_parent = self._selected_parent()
         if selected_parent is not None:

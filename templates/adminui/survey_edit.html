@@ -1,4 +1,5 @@
 {% extends "admin_base.html" %}
+{% load static %}
 
 {% block title %}Edit Survey: {{ survey.name }} - The Phage{% endblock %}
 
@@ -52,136 +53,63 @@
   </section>
 
   {% for card in question_cards %}
-    <section id="question-{{ card.question.id }}" class="content-card">
-      <h2>Question: {{ card.question.name }}</h2>
-      <form id="{{ card.form_id }}" method="post" action="{% url 'adminui:survey-edit' survey.slug %}#question-{{ card.question.id }}" novalidate>
-        {% csrf_token %}
-        <input type="hidden" name="question_id" value="{{ card.question.id }}">
-      </form>
-      {{ card.question_form.non_field_errors }}
-      {{ card.option_form.non_field_errors }}
-      <div class="form-grid">
-        <div class="form-row">
-          {{ card.question_form.name.label_tag }}
-          {{ card.question_form.name }}
-          {{ card.question_form.name.errors }}
-        </div>
-        <div class="form-row">
-          {{ card.question_form.render_hint.label_tag }}
-          {{ card.question_form.render_hint }}
-          {{ card.question_form.render_hint.errors }}
-        </div>
-      </div>
-      <div class="form-row">
-        {{ card.question_form.description_markdown.label_tag }}
-        {{ card.question_form.description_markdown }}
-        {{ card.question_form.description_markdown.errors }}
-      </div>
-      <div class="checkbox-list">
-        <label>{{ card.question_form.is_required }} Required</label>
-        {{ card.question_form.is_required.errors }}
-      </div>
-
-      {% if card.is_choice_based %}
-        <h3>Create Choice</h3>
-        <div class="choice-inline-form">
-          {{ card.choice_create_form.non_field_errors }}
+    <section id="question-{{ card.question.id }}" class="content-card" data-survey-question-card>
+      <h2 class="collapsible-card-title">
+        <button type="button" class="collapsible-card-toggle" aria-expanded="true" aria-controls="question-{{ card.question.id }}-body" data-survey-question-toggle>
+          <span aria-hidden="true" data-collapsible-arrow>▾</span>
+          <span>Question: {{ card.question.name }}</span>
+        </button>
+      </h2>
+      <div id="question-{{ card.question.id }}-body" data-collapsible-body>
+        <form id="{{ card.form_id }}" method="post" action="{% url 'adminui:survey-edit' survey.slug %}#question-{{ card.question.id }}" novalidate>
+          {% csrf_token %}
+          <input type="hidden" name="question_id" value="{{ card.question.id }}">
+        </form>
+        {{ card.question_form.non_field_errors }}
+        {{ card.option_form.non_field_errors }}
+        <div class="form-grid">
           <div class="form-row">
-            {{ card.choice_create_form.label.label_tag }}
-            {{ card.choice_create_form.label }}
-            {{ card.choice_create_form.label.errors }}
+            {{ card.question_form.name.label_tag }}
+            {{ card.question_form.name }}
+            {{ card.question_form.name.errors }}
           </div>
           <div class="form-row">
-            {{ card.choice_create_form.value.label_tag }}
-            {{ card.choice_create_form.value }}
-            {{ card.choice_create_form.value.errors }}
+            {{ card.question_form.render_hint.label_tag }}
+            {{ card.question_form.render_hint }}
+            {{ card.question_form.render_hint.errors }}
           </div>
-          <button type="submit" name="action" value="create_choice" form="{{ card.form_id }}" class="secondary-button">Create Choice</button>
+        </div>
+        <div class="form-row">
+          {{ card.question_form.description_markdown.label_tag }}
+          {{ card.question_form.description_markdown }}
+          {{ card.question_form.description_markdown.errors }}
+        </div>
+        <div class="checkbox-list">
+          <label>{{ card.question_form.is_required }} Required</label>
+          {{ card.question_form.is_required.errors }}
         </div>
 
-        {% if card.choices %}
-          <table>
-            <thead>
-              <tr>
-                <th>Label And Value</th>
-                <th>Order</th>
-                <th>Delete</th>
-              </tr>
-            </thead>
-            <tbody>
-            {% for choice_card in card.choices %}
-              <tr>
-                <td>
-                  <form class="choice-inline-form" method="post" action="{% url 'adminui:survey-edit' survey.slug %}#question-{{ card.question.id }}" novalidate>
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="update_choice">
-                    <input type="hidden" name="choice_id" value="{{ choice_card.choice.id }}">
-                    {{ choice_card.form.non_field_errors }}
-                    <div class="form-row">
-                      {{ choice_card.form.label.label_tag }}
-                      {{ choice_card.form.label }}
-                      {{ choice_card.form.label.errors }}
-                    </div>
-                    <div class="form-row">
-                      {{ choice_card.form.value.label_tag }}
-                      {{ choice_card.form.value }}
-                      {{ choice_card.form.value.errors }}
-                    </div>
-                    <button type="submit" class="secondary-button">Update Choice</button>
-                  </form>
-                </td>
-                <td>
-                  <div class="order-actions">
-                    {% if not forloop.first %}
-                      <form class="inline-form" method="post" action="{% url 'adminui:survey-edit' survey.slug %}#question-{{ card.question.id }}">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="choice_move_up">
-                        <input type="hidden" name="choice_id" value="{{ choice_card.choice.id }}">
-                        <button type="submit" class="secondary-button icon-button" aria-label="Move choice up" title="Move up">▲</button>
-                      </form>
-                    {% endif %}
-                    {% if not forloop.last %}
-                      <form class="inline-form" method="post" action="{% url 'adminui:survey-edit' survey.slug %}#question-{{ card.question.id }}">
-                        {% csrf_token %}
-                        <input type="hidden" name="action" value="choice_move_down">
-                        <input type="hidden" name="choice_id" value="{{ choice_card.choice.id }}">
-                        <button type="submit" class="secondary-button icon-button" aria-label="Move choice down" title="Move down">▼</button>
-                      </form>
-                    {% endif %}
-                  </div>
-                </td>
-                <td>
-                  <form class="inline-form" method="post" action="{% url 'adminui:survey-edit' survey.slug %}#question-{{ card.question.id }}">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="delete_choice">
-                    <input type="hidden" name="choice_id" value="{{ choice_card.choice.id }}">
-                    <button type="submit" class="danger-button">Delete</button>
-                  </form>
-                </td>
-              </tr>
-            {% endfor %}
-            </tbody>
-          </table>
-        {% else %}
-          <p>No choices configured.</p>
+        {% if card.is_choice_based %}
+          {% include "adminui/_survey_choice_editor.html" with choice_create_form=card.choice_create_form choices=card.choices choice_form_id=card.form_id choice_action_url=card.choice_action_url %}
+
+          <div class="checkbox-list">
+            <label>{{ card.option_form.allows_other }} Allow other</label>
+            {{ card.option_form.allows_other.errors }}
+          </div>
+          <div class="form-row">
+            {{ card.option_form.other_label.label_tag }}
+            {{ card.option_form.other_label }}
+            {{ card.option_form.other_label.errors }}
+          </div>
         {% endif %}
 
-        <div class="checkbox-list">
-          <label>{{ card.option_form.allows_other }} Allow other</label>
-          {{ card.option_form.allows_other.errors }}
+        <div class="form-actions">
+          <button type="submit" name="action" value="edit_question" form="{{ card.form_id }}" class="secondary-button">Edit</button>
+          <button type="submit" name="action" value="duplicate_question" form="{{ card.form_id }}" class="secondary-button">Duplicate</button>
+          {% if not card.is_first %}<button type="submit" name="action" value="question_move_up" form="{{ card.form_id }}" class="secondary-button icon-button" aria-label="Move question up" title="Move up">▲</button>{% endif %}
+          {% if not card.is_last %}<button type="submit" name="action" value="question_move_down" form="{{ card.form_id }}" class="secondary-button icon-button" aria-label="Move question down" title="Move down">▼</button>{% endif %}
+          <button type="submit" name="action" value="update_question" form="{{ card.form_id }}">Update</button>
         </div>
-        <div class="form-row">
-          {{ card.option_form.other_label.label_tag }}
-          {{ card.option_form.other_label }}
-          {{ card.option_form.other_label.errors }}
-        </div>
-      {% endif %}
-
-      <div class="form-actions">
-        <button type="submit" name="action" value="edit_question" form="{{ card.form_id }}" class="secondary-button">Edit</button>
-        {% if not card.is_first %}<button type="submit" name="action" value="question_move_up" form="{{ card.form_id }}" class="secondary-button icon-button" aria-label="Move question up" title="Move up">▲</button>{% endif %}
-        {% if not card.is_last %}<button type="submit" name="action" value="question_move_down" form="{{ card.form_id }}" class="secondary-button icon-button" aria-label="Move question down" title="Move down">▼</button>{% endif %}
-        <button type="submit" name="action" value="update_question" form="{{ card.form_id }}">Update</button>
       </div>
     </section>
   {% endfor %}
@@ -226,4 +154,8 @@
       <button type="submit" class="danger-button">Delete Survey</button>
     </form>
   </section>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/admin-surveys.js' %}" defer></script>
 {% endblock %}

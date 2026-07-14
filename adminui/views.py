@@ -36,6 +36,7 @@ from surveys.forms import (
 from surveys.models import Survey, SurveyAnswer, SurveyChoice, SurveyQuestion
 from surveys.question_types import is_choice_question_type
 from surveys.services import (
+    duplicate_question,
     load_answer_json,
     move_choice,
     move_question,
@@ -594,6 +595,7 @@ def survey_edit(request: HttpRequest, slug: str) -> HttpResponse:
         elif action in {
             "update_question",
             "edit_question",
+            "duplicate_question",
             "question_move_up",
             "question_move_down",
         }:
@@ -611,6 +613,10 @@ def survey_edit(request: HttpRequest, slug: str) -> HttpResponse:
                     move_question(question, "up")
                 elif action == "question_move_down":
                     move_question(question, "down")
+                elif action == "duplicate_question":
+                    duplicate = duplicate_question(question)
+                    messages.success(request, "Question duplicated.")
+                    return redirect(_survey_section_url(survey, f"question-{duplicate.id}"))
                 elif action == "edit_question":
                     messages.success(request, "Question updated.")
                     return redirect(
@@ -628,6 +634,8 @@ def survey_edit(request: HttpRequest, slug: str) -> HttpResponse:
                 pk=request.POST.get("question_id"),
                 survey=survey,
             )
+            if not question.is_choice_based:
+                raise PermissionDenied
             question_form = SurveyQuestionAdminForm(request.POST, instance=question)
             option_form = SurveyQuestionOptionsForm(request.POST, question=question)
             choice_form = SurveyChoiceCreateForm(request.POST, question=question)
@@ -715,9 +723,12 @@ def survey_edit(request: HttpRequest, slug: str) -> HttpResponse:
 def survey_question_edit(request: HttpRequest, slug: str, question_id: int) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
     question = get_object_or_404(SurveyQuestion, pk=question_id, survey=survey)
+    question_form_id = f"question-detail-form-{question.id}"
     question_form = SurveyQuestionAdminForm(instance=question)
     option_form = SurveyQuestionOptionsForm(question=question)
     condition_form = SurveyConditionForm(question=question)
+    bound_choice_forms = {}
+    bound_choice_create_form = None
 
     if request.method == "POST":
         action = request.POST.get("action")
@@ -735,24 +746,96 @@ def survey_question_edit(request: HttpRequest, slug: str, question_id: int) -> H
                 condition_form.save()
                 messages.success(request, "Conditions updated.")
                 return redirect(_survey_question_section_url(survey, question, "conditional"))
+        elif action == "create_choice":
+            if not question.is_choice_based:
+                raise PermissionDenied
+            question_form = SurveyQuestionAdminForm(request.POST, instance=question)
+            option_form = SurveyQuestionOptionsForm(request.POST, question=question)
+            choice_create_form = SurveyChoiceCreateForm(request.POST, question=question)
+            question_forms_valid = question_form.is_valid() and option_form.is_valid()
+            if question_forms_valid:
+                question_form.save()
+                option_form.save()
+            if question_forms_valid and choice_create_form.is_valid():
+                choice = choice_create_form.save(commit=False)
+                choice.display_order = next_choice_order(question)
+                choice.save()
+                messages.success(request, "Choice created.")
+                return redirect(_survey_question_section_url(survey, question, "choices"))
+            bound_choice_create_form = choice_create_form
+        elif action == "update_choice":
+            choice = get_object_or_404(
+                SurveyChoice,
+                pk=request.POST.get("choice_id"),
+                question=question,
+            )
+            choice_form = SurveyChoiceForm(request.POST, instance=choice)
+            if choice_form.is_valid():
+                choice_form.save()
+                messages.success(request, "Choice updated.")
+                return redirect(_survey_question_section_url(survey, question, "choices"))
+            bound_choice_forms[choice.id] = choice_form
+        elif action in {"choice_move_up", "choice_move_down"}:
+            choice = get_object_or_404(
+                SurveyChoice,
+                pk=request.POST.get("choice_id"),
+                question=question,
+            )
+            move_choice(choice, "up" if action == "choice_move_up" else "down")
+            return redirect(_survey_question_section_url(survey, question, "choices"))
+        elif action == "delete_choice":
+            choice = get_object_or_404(
+                SurveyChoice,
+                pk=request.POST.get("choice_id"),
+                question=question,
+            )
+            try:
+                choice.delete()
+                messages.success(request, "Choice deleted.")
+            except ValidationError as error:
+                messages.error(request, error.messages[0])
+            return redirect(_survey_question_section_url(survey, question, "choices"))
         elif action == "delete_question":
             question.delete()
             messages.success(request, "Question deleted.")
             return redirect(_survey_section_url(survey, "create-question"))
 
-    _set_form_attr(question_form, f"question-detail-form-{question.id}")
-    _set_form_attr(option_form, f"question-detail-form-{question.id}")
+    _set_form_attr(question_form, question_form_id)
+    _set_form_attr(option_form, question_form_id)
+    choice_context = {}
+    if question.is_choice_based:
+        choice_context = _survey_choice_context(
+            question,
+            question_form_id,
+            _survey_question_section_url(survey, question, "choices"),
+            bound_choice_forms,
+            bound_choice_create_form,
+        )
     return render(
         request,
         "adminui/survey_question_edit.html",
         {
+            **choice_context,
             "condition_form": condition_form,
+            "condition_choice_cache": _condition_choice_cache(condition_form),
             "question": question,
+            "question_form_id": question_form_id,
             "question_form": question_form,
             "option_form": option_form,
             "survey": survey,
         },
     )
+
+
+def _condition_choice_cache(condition_form: SurveyConditionForm) -> dict[str, list[dict[str, str]]]:
+    questions = condition_form.fields["depends_on_question"].queryset.prefetch_related("choices")
+    return {
+        str(question.id): [
+            {"id": str(choice.id), "label": choice.label}
+            for choice in question.choices.all()
+        ]
+        for question in questions
+    }
 
 
 @admin_required
@@ -1003,6 +1086,53 @@ def _set_form_attr(form, form_id: str) -> None:
         field.widget.attrs["form"] = form_id
 
 
+def _survey_choice_context(
+    question: SurveyQuestion,
+    choice_form_id: str,
+    choice_action_url: str,
+    bound_choice_forms: dict[int, SurveyChoiceForm] | None = None,
+    bound_choice_create_form: SurveyChoiceCreateForm | None = None,
+) -> dict[str, object]:
+    choice_create_form = bound_choice_create_form or SurveyChoiceCreateForm(question=question)
+    _set_form_attr(choice_create_form, choice_form_id)
+    choice_create_form.fields["label"].widget.attrs["id"] = (
+        f"id_question_{question.id}_choice_label"
+    )
+    choice_create_form.fields["value"].widget.attrs["id"] = (
+        f"id_question_{question.id}_choice_value"
+    )
+    return {
+        "choice_action_url": choice_action_url,
+        "choice_create_form": choice_create_form,
+        "choice_form_id": choice_form_id,
+        "choices": _survey_choice_cards(question, bound_choice_forms),
+    }
+
+
+def _survey_choice_cards(
+    question: SurveyQuestion,
+    bound_choice_forms: dict[int, SurveyChoiceForm] | None = None,
+) -> list[dict[str, object]]:
+    bound_choice_forms = bound_choice_forms or {}
+    choices = []
+    for choice in question.choices.all():
+        choice_form_id = f"choice-form-{choice.id}"
+        choice_form = bound_choice_forms.get(choice.id, SurveyChoiceForm(instance=choice))
+        _set_form_attr(choice_form, choice_form_id)
+        choice_form.fields["label"].widget.attrs["aria-label"] = "Choice label"
+        choice_form.fields["label"].widget.attrs["id"] = f"id_choice_{choice.id}_label"
+        choice_form.fields["value"].widget.attrs["aria-label"] = "Choice value"
+        choice_form.fields["value"].widget.attrs["id"] = f"id_choice_{choice.id}_value"
+        choices.append(
+            {
+                "choice": choice,
+                "form": choice_form,
+                "form_id": choice_form_id,
+            }
+        )
+    return choices
+
+
 def _survey_question_cards(
     survey: Survey,
     bound_question_forms: dict[int, SurveyQuestionAdminForm] | None = None,
@@ -1028,32 +1158,27 @@ def _survey_question_cards(
         )
         _set_form_attr(question_form, form_id)
         _set_form_attr(option_form, form_id)
-        choice_create_form = bound_choice_create_forms.get(
-            question.id,
-            SurveyChoiceCreateForm(question=question),
-        )
-        _set_form_attr(choice_create_form, form_id)
-        choices = []
-        for choice in question.choices.all():
-            choices.append(
-                {
-                    "choice": choice,
-                    "form": bound_choice_forms.get(choice.id, SurveyChoiceForm(instance=choice)),
-                }
+        is_choice_based = is_choice_question_type(question.question_type)
+        card = {
+            "form_id": form_id,
+            "is_choice_based": is_choice_based,
+            "is_first": index == 0,
+            "is_last": index == len(questions) - 1,
+            "option_form": option_form,
+            "question": question,
+            "question_form": question_form,
+        }
+        if is_choice_based:
+            card.update(
+                _survey_choice_context(
+                    question,
+                    form_id,
+                    _survey_section_url(survey, f"question-{question.id}"),
+                    bound_choice_forms,
+                    bound_choice_create_forms.get(question.id),
+                )
             )
-        cards.append(
-            {
-                "choice_create_form": choice_create_form,
-                "choices": choices,
-                "form_id": form_id,
-                "is_choice_based": is_choice_question_type(question.question_type),
-                "is_first": index == 0,
-                "is_last": index == len(questions) - 1,
-                "option_form": option_form,
-                "question": question,
-                "question_form": question_form,
-            }
-        )
+        cards.append(card)
     return cards
 
 
