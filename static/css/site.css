@@ -467,6 +467,15 @@ input.visually-hidden {
   padding-left: 1.25rem;
 }
 
+.survey-error-summary {
+  background: var(--error-bg);
+  border-color: var(--action);
+}
+
+.survey-error-summary p {
+  margin-top: 0;
+}
+
 .help-text {
   color: var(--muted);
   font-size: 0.95rem;

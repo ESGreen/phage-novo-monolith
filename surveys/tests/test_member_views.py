@@ -185,6 +185,31 @@ def test_submit_redirects_to_configured_internal_url(client) -> None:
     assert response["Location"] == "/2026/dashboard/"
 
 
+def test_invalid_submit_shows_summary_and_preserves_attempted_answers(client) -> None:
+    user = create_user()
+    survey = create_survey()
+    survey.redirect_after_submission_url = "/dashboard/"
+    survey.save(update_fields=["redirect_after_submission_url", "updated_at"])
+    name = create_question(survey, "Name")
+    required = create_question(survey, "Required", display_order=2, required=True)
+    client.force_login(user)
+
+    response = client.post(
+        "/survey/arrival-survey/",
+        {f"question_{name.id}": "Alice", f"question_{required.id}": ""},
+    )
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert response.request["PATH_INFO"] == "/survey/arrival-survey/"
+    assert "Survey not submitted" in body
+    assert "Please fix the highlighted questions before submitting." in body
+    assert f'href="#question-{required.id}"' in body
+    assert 'value="Alice"' in body
+    assert "This question is required." in body
+    assert SurveyResponse.objects.count() == 0
+
+
 def test_completion_page_loads_and_links_back(client) -> None:
     user = create_user()
     create_survey()
@@ -244,8 +269,13 @@ def test_member_submission_validates_required_visibility_and_clears_hidden_answe
     client.force_login(user)
 
     response = client.post("/survey/arrival-survey/", {f"question_{parent.id}": str(zero.id)})
+    body = response.content.decode()
     assert response.status_code == 200
-    assert b"This question is required." in response.content
+    assert "Survey not submitted" in body
+    assert "This question is required." in body
+    assert f'value="{zero.id}" data-choice-input' in body
+    assert "checked" in body
+    assert SurveyResponse.objects.count() == 0
 
     response = client.post(
         "/survey/arrival-survey/",
@@ -284,6 +314,11 @@ def test_submission_validates_email_date_number_choice_and_other(client) -> None
     )
 
     body = response.content.decode()
+    assert "Survey not submitted" in body
+    assert 'value="not-email"' in body
+    assert 'value="bad-date"' in body
+    assert 'value="abc"' in body
+    assert 'value="__other__" data-other-checkbox checked' in body
     assert "Enter a valid email address." in body
     assert "Enter a valid date." in body
     assert "Enter a valid number." in body

@@ -35,6 +35,8 @@ class ParsedAnswer:
 class SubmissionResult:
     success: bool
     errors: dict[int, list[str]] = field(default_factory=dict)
+    answers: dict[int, ParsedAnswer] = field(default_factory=dict)
+    visible_question_ids: set[int] = field(default_factory=set)
 
 
 def answer_json(values: list[str]) -> str:
@@ -262,7 +264,12 @@ def submit_survey_response(survey: Survey, user: object, post_data: Any) -> Subm
         _validate_answer(question, parsed, errors)
 
     if errors:
-        return SubmissionResult(success=False, errors=errors)
+        return SubmissionResult(
+            success=False,
+            errors=errors,
+            answers=answers,
+            visible_question_ids=visible_ids,
+        )
 
     with transaction.atomic():
         response, _ = survey.responses.get_or_create(user=user)
@@ -282,7 +289,7 @@ def submit_survey_response(survey: Survey, user: object, post_data: Any) -> Subm
                     "choice_snapshot": json.dumps(parsed.choice_snapshot),
                 },
             )
-    return SubmissionResult(success=True)
+    return SubmissionResult(success=True, answers=answers, visible_question_ids=visible_ids)
 
 
 def _questions_for_survey(survey: Survey):

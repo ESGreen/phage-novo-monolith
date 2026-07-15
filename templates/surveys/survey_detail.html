@@ -9,6 +9,18 @@
     {{ description_html }}
   </section>
 
+  {% if survey_has_errors %}
+    <section class="content-card survey-error-summary" role="alert" aria-labelledby="survey-error-summary-title">
+      <h2 id="survey-error-summary-title">Survey not submitted</h2>
+      <p>Please fix the highlighted questions before submitting.</p>
+      <ul>
+        {% for card in question_cards %}
+          {% if card.errors %}<li><a href="#question-{{ card.question.id }}">{{ card.question.name }}</a></li>{% endif %}
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
   <form method="post" data-survey-form novalidate>
     {% csrf_token %}
     {% for card in question_cards %}
