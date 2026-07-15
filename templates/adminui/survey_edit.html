@@ -59,6 +59,7 @@
           <span aria-hidden="true" data-collapsible-arrow>▾</span>
           <span>Question: {{ card.question.name }}</span>
         </button>
+        <button type="submit" name="action" value="edit_question" form="{{ card.form_id }}" class="secondary-button collapsible-card-edit">Edit</button>
       </h2>
       <div id="question-{{ card.question.id }}-body" data-collapsible-body>
         <form id="{{ card.form_id }}" method="post" action="{% url 'adminui:survey-edit' survey.slug %}#question-{{ card.question.id }}" novalidate>

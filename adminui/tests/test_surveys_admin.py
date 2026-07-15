@@ -234,6 +234,11 @@ def test_admin_can_create_questions_with_default_hints_and_question_cards(client
         in body
     )
     assert 'class="collapsible-card-toggle"' in body
+    assert (
+        f'name="action" value="edit_question" form="question-form-{text_question.id}" '
+        'class="secondary-button collapsible-card-edit"'
+        in body
+    )
     assert f'aria-controls="question-{text_question.id}-body"' in body
     assert 'aria-expanded="true"' in body
     assert f'id="question-{text_question.id}-body" data-collapsible-body' in body

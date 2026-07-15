@@ -13,7 +13,7 @@
     {% csrf_token %}
     {% for card in question_cards %}
       <section id="question-{{ card.question.id }}" class="content-card survey-question-card" data-survey-question-card data-question-id="{{ card.question.id }}" data-visible-if-question-id="{{ card.condition_parent_id }}" data-visible-if-choice-ids="{{ card.condition_choice_ids }}">
-        <h2>{{ card.question.name }}{% if card.question.is_required %} <span aria-label="required">*</span>{% endif %}</h2>
+        <h2 id="question-{{ card.question.id }}-label">{{ card.question.name }}{% if card.question.is_required %} <span aria-label="required">*</span>{% endif %}</h2>
         {% if card.description_html %}<div class="markdown-body">{{ card.description_html }}</div>{% endif %}
         {% if card.errors %}
           <ul class="errorlist">
@@ -23,17 +23,15 @@
 
         {% if card.is_text %}
           <div class="form-row">
-            <label for="id_{{ card.field_name }}">Answer</label>
             {% if card.is_long_text %}
-              <textarea id="id_{{ card.field_name }}" name="{{ card.field_name }}" rows="5">{{ card.text_value }}</textarea>
+              <textarea id="id_{{ card.field_name }}" name="{{ card.field_name }}" rows="5" aria-labelledby="question-{{ card.question.id }}-label">{{ card.text_value }}</textarea>
             {% else %}
-              <input id="id_{{ card.field_name }}" type="{{ card.input_type }}" name="{{ card.field_name }}" value="{{ card.text_value }}">
+              <input id="id_{{ card.field_name }}" type="{{ card.input_type }}" name="{{ card.field_name }}" value="{{ card.text_value }}" aria-labelledby="question-{{ card.question.id }}-label">
             {% endif %}
           </div>
         {% elif card.is_select %}
           <div class="form-row">
-            <label for="id_{{ card.field_name }}">Answer</label>
-            <select id="id_{{ card.field_name }}" name="{{ card.field_name }}" data-choice-select data-question-id="{{ card.question.id }}">
+            <select id="id_{{ card.field_name }}" name="{{ card.field_name }}" data-choice-select data-question-id="{{ card.question.id }}" aria-labelledby="question-{{ card.question.id }}-label">
               <option value="">----</option>
               {% for choice in card.question.choices.all %}
                 <option value="{{ choice.id }}" data-choice-id="{{ choice.id }}"{% if choice.id in card.selected_choice_ids %} selected{% endif %}>{{ choice.label }}</option>
@@ -45,34 +43,27 @@
           </div>
           {% if card.question.allows_other %}
             <div class="form-row">
-              <label for="id_{{ card.other_name }}">{{ card.question.other_label }}</label>
-              <input id="id_{{ card.other_name }}" type="text" name="{{ card.other_name }}" value="{{ card.other_value }}" data-other-text>
+              <input id="id_{{ card.other_name }}" type="text" name="{{ card.other_name }}" value="{{ card.other_value }}" aria-label="{{ card.question.other_label }}" data-other-text>
             </div>
           {% endif %}
         {% else %}
-          <fieldset class="compact-fieldset">
-            <legend>Answer</legend>
-            <div class="checkbox-list">
-              {% for choice in card.question.choices.all %}
-                <label>
-                  <input type="{% if card.is_multi_choice %}checkbox{% else %}radio{% endif %}" name="{{ card.field_name }}" value="{{ choice.id }}" data-choice-input data-question-id="{{ card.question.id }}" data-choice-id="{{ choice.id }}"{% if choice.id in card.selected_choice_ids %} checked{% endif %}>
-                  {{ choice.label }}
-                </label>
-              {% endfor %}
-              {% if card.question.allows_other %}
+          <div class="checkbox-list" role="group" aria-labelledby="question-{{ card.question.id }}-label">
+            {% for choice in card.question.choices.all %}
+              <label>
+                <input type="{% if card.is_multi_choice %}checkbox{% else %}radio{% endif %}" name="{{ card.field_name }}" value="{{ choice.id }}" data-choice-input data-question-id="{{ card.question.id }}" data-choice-id="{{ choice.id }}"{% if choice.id in card.selected_choice_ids %} checked{% endif %}>
+                {{ choice.label }}
+              </label>
+            {% endfor %}
+            {% if card.question.allows_other %}
+              <div class="survey-other-option">
                 <label>
                   <input type="{% if card.is_multi_choice %}checkbox{% else %}radio{% endif %}" name="{{ card.field_name }}" value="{{ card.other_value_key }}" data-other-checkbox{% if card.other_selected %} checked{% endif %}>
                   {{ card.question.other_label }}
                 </label>
-              {% endif %}
-            </div>
-          </fieldset>
-          {% if card.question.allows_other %}
-            <div class="form-row">
-              <label for="id_{{ card.other_name }}">{{ card.question.other_label }}</label>
-              <input id="id_{{ card.other_name }}" type="text" name="{{ card.other_name }}" value="{{ card.other_value }}" data-other-text>
-            </div>
-          {% endif %}
+                <input id="id_{{ card.other_name }}" class="survey-other-text" type="text" name="{{ card.other_name }}" value="{{ card.other_value }}" aria-label="{{ card.question.other_label }}" data-other-text>
+              </div>
+            {% endif %}
+          </div>
         {% endif %}
       </section>
     {% endfor %}

@@ -94,8 +94,8 @@ def test_unknown_or_inactive_survey_returns_404_for_member(client) -> None:
 def test_active_survey_renders_description_questions_and_controls(client) -> None:
     user = create_user()
     survey = create_survey()
-    create_question(survey, "Name", render_hint=RENDER_HINT_SHORT_TEXT)
-    create_question(survey, "Bio", render_hint=RENDER_HINT_LONG_TEXT, display_order=2)
+    name = create_question(survey, "Name", render_hint=RENDER_HINT_SHORT_TEXT)
+    bio = create_question(survey, "Bio", render_hint=RENDER_HINT_LONG_TEXT, display_order=2)
     create_question(survey, "Email", render_hint=RENDER_HINT_EMAIL, display_order=3)
     create_question(survey, "Date", render_hint=RENDER_HINT_DATE, display_order=4)
     create_question(survey, "Number", render_hint=RENDER_HINT_NUMBER, display_order=5)
@@ -139,6 +139,16 @@ def test_active_survey_renders_description_questions_and_controls(client) -> Non
     assert "textarea" in body
     assert "data-survey-question-card" in body
     assert "__other__" in body
+    assert ">Answer</label>" not in body
+    assert "<legend>Answer</legend>" not in body
+    assert "<fieldset" not in body
+    assert f'aria-labelledby="question-{name.id}-label"' in body
+    assert f'aria-labelledby="question-{bio.id}-label"' in body
+    other_start = body.index('class="survey-other-option"')
+    other_block = body[other_start : body.index("</div>", other_start)]
+    assert other_block.index("__other__") < other_block.index(f'id="id_question_{radio.id}_other"')
+    assert f'id="id_question_{radio.id}_other" class="survey-other-text"' in other_block
+    assert f'<label for="id_question_{radio.id}_other">' not in body
 
 
 def test_submit_creates_response_then_resubmits_existing_response(client) -> None:
