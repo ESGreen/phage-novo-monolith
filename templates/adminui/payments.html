@@ -21,6 +21,7 @@
           <th>Created</th>
           <th>Paid</th>
           <th>Note</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -37,6 +38,7 @@
           <td>{{ payment.created_at|date:"Y-m-d H:i:s" }}</td>
           <td>{% if payment.paid_at %}{{ payment.paid_at|date:"Y-m-d H:i:s" }}{% else %}----{% endif %}</td>
           <td>{{ payment.note|default:"----" }}</td>
+          <td><a href="{% url 'adminui:payment-detail' payment_id=payment.id %}">Resolve</a></td>
         </tr>
       {% endfor %}
       </tbody>

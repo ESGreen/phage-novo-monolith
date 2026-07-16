@@ -533,6 +533,39 @@ class ManualPaymentCreateForm(forms.Form):
         return cleaned_data
 
 
+class PaymentResolutionNoteForm(forms.Form):
+    note = forms.CharField(
+        label="Reason/reference",
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+
+
+class PaymentCancelManyForm(PaymentResolutionNoteForm):
+    confirm = forms.BooleanField(
+        label=(
+            "I understand this will cancel every open/problem payment attempt "
+            "for this member and year."
+        ),
+    )
+
+
+class PaymentMarkPaidForm(forms.Form):
+    stripe_reference = forms.CharField(
+        label="Stripe reference",
+        help_text=(
+            "Enter a Stripe payment intent, checkout session, receipt URL, "
+            "or ledger reference."
+        ),
+    )
+    note = forms.CharField(
+        label="Confirmation note",
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
+    confirmed = forms.BooleanField(
+        label="I have confirmed this transaction in the Stripe ledger.",
+    )
+
+
 class MediaUploadAdminForm(forms.Form):
     title = forms.CharField(max_length=200, required=False)
     image = forms.ImageField()

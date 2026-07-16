@@ -1,0 +1,232 @@
+{% extends "admin_base.html" %}
+{% load money %}
+
+{% block title %}Payment {{ payment.id }} - The Phage{% endblock %}
+
+{% block content %}
+  <div class="page-heading">
+    <h1>Payment {{ payment.id }}</h1>
+    <p><a href="{% url 'adminui:payments' %}">Back to payments</a></p>
+  </div>
+
+  <section class="content-card">
+    <h2>Payment Details</h2>
+    <table>
+      <tbody>
+        <tr>
+          <th scope="row">Member</th>
+          <td>{{ payment.user.email }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Camp year</th>
+          <td>{{ payment.camp_year.year }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Status</th>
+          <td>{{ payment.get_status_display }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Mode</th>
+          <td>{{ payment.get_mode_display }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Tax</th>
+          <td>{{ payment.tax_amount_cents|cents }} ({{ payment.tax_tier_name_snapshot }})</td>
+        </tr>
+        <tr>
+          <th scope="row">Add-ons</th>
+          <td>{{ payment.add_on_amount_cents|cents }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Total</th>
+          <td>{{ payment.total_amount_cents|cents }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Created by</th>
+          <td>{% if payment.created_by %}{{ payment.created_by.email }}{% else %}----{% endif %}</td>
+        </tr>
+        <tr>
+          <th scope="row">Created</th>
+          <td>{{ payment.created_at|date:"Y-m-d H:i:s" }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Paid</th>
+          <td>{% if payment.paid_at %}{{ payment.paid_at|date:"Y-m-d H:i:s" }}{% else %}----{% endif %}</td>
+        </tr>
+        <tr>
+          <th scope="row">Checkout session</th>
+          <td>{{ payment.stripe_checkout_session_id|default:"----" }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Payment intent</th>
+          <td>{{ payment.stripe_payment_intent_id|default:"----" }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Note</th>
+          <td>{{ payment.note|default:"----" }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Add-on Snapshots</h3>
+    {% if payment.add_ons.all %}
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for add_on in payment.add_ons.all %}
+            <tr>
+              <td>{{ add_on.name_snapshot }}</td>
+              <td>{{ add_on.amount_cents_snapshot|cents }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No add-ons recorded.</p>
+    {% endif %}
+  </section>
+
+  <section class="content-card danger-card">
+    <h2>Cancel This Attempt</h2>
+    {% if can_cancel %}
+      <form method="post">
+        {% csrf_token %}
+        {{ cancel_form.non_field_errors }}
+        <input type="hidden" name="action" value="cancel_payment">
+        <div class="form-row">
+          {{ cancel_form.note.label_tag }}
+          {{ cancel_form.note }}
+          {{ cancel_form.note.errors }}
+        </div>
+        <button class="danger-button" type="submit">Cancel this payment attempt</button>
+      </form>
+    {% else %}
+      <p>This payment is not in a cancellable state.</p>
+    {% endif %}
+  </section>
+
+  <section class="content-card danger-card">
+    <h2>Cancel All Open/Problem Attempts</h2>
+    <p>This cancels created, failed, and requires-review attempts for this member and camp year. Paid and refunded payments are left unchanged.</p>
+    {% if cancelable_payment_count %}
+      <form method="post">
+        {% csrf_token %}
+        {{ cancel_many_form.non_field_errors }}
+        <input type="hidden" name="action" value="cancel_related_payments">
+        <div class="form-row">
+          {{ cancel_many_form.note.label_tag }}
+          {{ cancel_many_form.note }}
+          {{ cancel_many_form.note.errors }}
+        </div>
+        <div class="form-row">
+          <label>{{ cancel_many_form.confirm }} {{ cancel_many_form.confirm.label }}</label>
+          {{ cancel_many_form.confirm.errors }}
+        </div>
+        <button class="danger-button" type="submit">Cancel {{ cancelable_payment_count }} attempt(s)</button>
+      </form>
+    {% else %}
+      <p>No open/problem attempts are available to cancel for this member and year.</p>
+    {% endif %}
+  </section>
+
+  <section class="content-card">
+    <h2>Mark Stripe Payment Paid</h2>
+    <p>Use this only after confirming the transaction in the Stripe ledger.</p>
+    {% if can_mark_paid %}
+      <form method="post">
+        {% csrf_token %}
+        {{ mark_paid_form.non_field_errors }}
+        <input type="hidden" name="action" value="mark_paid">
+        <div class="form-row">
+          {{ mark_paid_form.stripe_reference.label_tag }}
+          {{ mark_paid_form.stripe_reference }}
+          <p class="help-text">{{ mark_paid_form.stripe_reference.help_text }}</p>
+          {{ mark_paid_form.stripe_reference.errors }}
+        </div>
+        <div class="form-row">
+          {{ mark_paid_form.note.label_tag }}
+          {{ mark_paid_form.note }}
+          {{ mark_paid_form.note.errors }}
+        </div>
+        <div class="form-row">
+          <label>{{ mark_paid_form.confirmed }} {{ mark_paid_form.confirmed.label }}</label>
+          {{ mark_paid_form.confirmed.errors }}
+        </div>
+        <button type="submit">Mark paid</button>
+      </form>
+    {% else %}
+      <p>This payment cannot be marked paid with the Stripe-ledger action.</p>
+    {% endif %}
+  </section>
+
+  <section class="content-card">
+    <h2>Same Member/Year Payments</h2>
+    {% if related_payments %}
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Status</th>
+            <th>Mode</th>
+            <th>Total</th>
+            <th>Created</th>
+            <th>Paid</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for related_payment in related_payments %}
+            <tr>
+              <td>
+                {% if related_payment.id == payment.id %}
+                  {{ related_payment.id }} (current)
+                {% else %}
+                  <a href="{% url 'adminui:payment-detail' payment_id=related_payment.id %}">{{ related_payment.id }}</a>
+                {% endif %}
+              </td>
+              <td>{{ related_payment.get_status_display }}</td>
+              <td>{{ related_payment.get_mode_display }}</td>
+              <td>{{ related_payment.total_amount_cents|cents }}</td>
+              <td>{{ related_payment.created_at|date:"Y-m-d H:i:s" }}</td>
+              <td>{% if related_payment.paid_at %}{{ related_payment.paid_at|date:"Y-m-d H:i:s" }}{% else %}----{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No related payments found.</p>
+    {% endif %}
+  </section>
+
+  <section class="content-card">
+    <h2>Payment Logs</h2>
+    {% if logs %}
+      <table>
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Level</th>
+            <th>Event</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in logs %}
+            <tr>
+              <td>{{ log.created_at|date:"Y-m-d H:i:s" }}</td>
+              <td>{{ log.get_level_display }}</td>
+              <td>{{ log.event_type }}</td>
+              <td>{{ log.message|default:"----" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p>No logs recorded for this payment.</p>
+    {% endif %}
+  </section>
+{% endblock %}

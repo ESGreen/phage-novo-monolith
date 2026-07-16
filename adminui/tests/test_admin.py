@@ -100,6 +100,34 @@ def create_tax_add_on(
     )
 
 
+def create_payment(
+    user,
+    camp_year: CampYear,
+    *,
+    mode: str = Payment.Mode.STRIPE_TEST,
+    paid_at=None,
+    status: str = Payment.Status.CREATED,
+    stripe_checkout_session_id: str | None = None,
+    stripe_payment_intent_id: str | None = None,
+) -> Payment:
+    if status == Payment.Status.PAID and paid_at is None:
+        paid_at = timezone.now()
+    return Payment.objects.create(
+        user=user,
+        camp_year=camp_year,
+        status=status,
+        mode=mode,
+        tax_amount_cents=10000,
+        add_on_amount_cents=0,
+        total_amount_cents=10000,
+        tax_tier_name_snapshot="Standard",
+        tax_tier_minimum_cents_snapshot=10000,
+        stripe_checkout_session_id=stripe_checkout_session_id,
+        stripe_payment_intent_id=stripe_payment_intent_id,
+        paid_at=paid_at,
+    )
+
+
 @pytest.mark.parametrize("url", ADMIN_SECTIONS)
 def test_admin_sections_require_login(client, url: str) -> None:
     response = client.get(url)
@@ -212,6 +240,148 @@ def test_payments_admin_renders_payment_and_log_tables(client) -> None:
     assert "webhook.signature.failure" in body
     assert "Webhook signature verification failed." in body
     assert "----" in body
+    assert f'href="/admin/payments/{payment.id}/"' in body
+
+
+def test_payment_detail_rejects_non_admin_members(client) -> None:
+    member = create_user(email="member@example.com")
+    camp_year = CampYear.objects.create(year=2026)
+    payment = create_payment(member, camp_year)
+    client.force_login(member)
+
+    response = client.get(f"/admin/payments/{payment.id}/")
+
+    assert response.status_code == 403
+
+
+def test_admin_can_cancel_created_payment(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    member = create_user(email="member@example.com")
+    camp_year = CampYear.objects.create(year=2026)
+    payment = create_payment(member, camp_year, status=Payment.Status.CREATED)
+    client.force_login(admin)
+
+    response = client.post(
+        f"/admin/payments/{payment.id}/",
+        {"action": "cancel_payment", "note": "bad checkout session"},
+    )
+
+    assert response.status_code == 302
+    assert response["Location"] == f"/admin/payments/{payment.id}/"
+    payment.refresh_from_db()
+    assert payment.status == Payment.Status.CANCELLED
+    payment_log = PaymentLog.objects.get(payment=payment)
+    assert payment_log.event_type == "admin_payment.cancel"
+    assert payment_log.mode == Payment.Mode.STRIPE_TEST
+    assert "bad checkout session" in payment_log.message
+    assert "admin@example.com" in payment_log.message
+
+
+def test_admin_can_cancel_all_problem_payments_for_member_year(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    member = create_user(email="member@example.com")
+    other_member = create_user(email="other@example.com")
+    camp_year = CampYear.objects.create(year=2026)
+    other_year = CampYear.objects.create(year=2027)
+    created_payment = create_payment(member, camp_year, status=Payment.Status.CREATED)
+    failed_payment = create_payment(member, camp_year, status=Payment.Status.FAILED)
+    review_payment = create_payment(member, camp_year, status=Payment.Status.REQUIRES_REVIEW)
+    paid_payment = create_payment(member, camp_year, status=Payment.Status.PAID)
+    refunded_payment = create_payment(member, camp_year, status=Payment.Status.REFUNDED)
+    cancelled_payment = create_payment(member, camp_year, status=Payment.Status.CANCELLED)
+    other_year_payment = create_payment(member, other_year, status=Payment.Status.CREATED)
+    other_member_payment = create_payment(other_member, camp_year, status=Payment.Status.CREATED)
+    client.force_login(admin)
+
+    response = client.post(
+        f"/admin/payments/{created_payment.id}/",
+        {
+            "action": "cancel_related_payments",
+            "confirm": "on",
+            "note": "clear stale attempts",
+        },
+    )
+
+    assert response.status_code == 302
+    for payment in [created_payment, failed_payment, review_payment]:
+        payment.refresh_from_db()
+        assert payment.status == Payment.Status.CANCELLED
+        log = PaymentLog.objects.get(payment=payment)
+        assert log.event_type == "admin_payment.cancel_all"
+        assert "clear stale attempts" in log.message
+    for payment, expected_status in [
+        (paid_payment, Payment.Status.PAID),
+        (refunded_payment, Payment.Status.REFUNDED),
+        (cancelled_payment, Payment.Status.CANCELLED),
+        (other_year_payment, Payment.Status.CREATED),
+        (other_member_payment, Payment.Status.CREATED),
+    ]:
+        payment.refresh_from_db()
+        assert payment.status == expected_status
+    assert PaymentLog.objects.count() == 3
+
+
+def test_admin_can_mark_stripe_payment_paid_after_ledger_confirmation(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    member = create_user(email="member@example.com")
+    camp_year = CampYear.objects.create(year=2026)
+    payment = create_payment(
+        member,
+        camp_year,
+        status=Payment.Status.REQUIRES_REVIEW,
+        stripe_checkout_session_id="cs_test_123",
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        f"/admin/payments/{payment.id}/",
+        {
+            "action": "mark_paid",
+            "confirmed": "on",
+            "note": "verified in Stripe ledger",
+            "stripe_reference": "pi_test_admin_123",
+        },
+    )
+
+    assert response.status_code == 302
+    payment.refresh_from_db()
+    assert payment.status == Payment.Status.PAID
+    assert payment.paid_at is not None
+    assert payment.stripe_checkout_session_id == "cs_test_123"
+    assert payment.stripe_payment_intent_id == "pi_test_admin_123"
+    payment_log = PaymentLog.objects.get(payment=payment)
+    assert payment_log.event_type == "admin_payment.mark_paid"
+    assert payment_log.mode == Payment.Mode.STRIPE_TEST
+    assert "verified in Stripe ledger" in payment_log.message
+    assert "pi_test_admin_123" in payment_log.message
+
+
+def test_admin_mark_paid_rejects_duplicate_paid_member_year(client) -> None:
+    admin = create_user(email="admin@example.com", is_admin=True)
+    member = create_user(email="member@example.com")
+    camp_year = CampYear.objects.create(year=2026)
+    create_payment(member, camp_year, status=Payment.Status.PAID)
+    payment = create_payment(member, camp_year, status=Payment.Status.CREATED)
+    client.force_login(admin)
+
+    response = client.post(
+        f"/admin/payments/{payment.id}/",
+        {
+            "action": "mark_paid",
+            "confirmed": "on",
+            "note": "verified in Stripe ledger",
+            "stripe_reference": "pi_test_admin_456",
+        },
+        follow=True,
+    )
+
+    assert response.status_code == 200
+    assert b"This user already has a paid payment for this camp year." in response.content
+    payment.refresh_from_db()
+    assert payment.status == Payment.Status.CREATED
+    assert payment.paid_at is None
+    assert payment.stripe_payment_intent_id is None
+    assert not PaymentLog.objects.filter(payment=payment).exists()
 
 
 def test_manual_payment_add_page_renders_form(client) -> None:

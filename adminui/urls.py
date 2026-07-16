@@ -23,6 +23,7 @@ urlpatterns = [
     path("admin/camp/<int:year>/", views.camp_year_edit, name="camp-year-edit"),
     path("admin/payments/", views.payments, name="payments"),
     path("admin/payments/add/", views.payment_add, name="payment-add"),
+    path("admin/payments/<int:payment_id>/", views.payment_detail, name="payment-detail"),
     path("admin/stripe/", views.stripe, name="stripe"),
     path("admin/pages/", views.pages, name="pages"),
     path("admin/pages/<slug:slug>/", views.page_edit, name="page-edit"),

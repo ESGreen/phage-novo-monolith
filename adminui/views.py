@@ -55,10 +55,20 @@ from .forms import (
     MediaUploadAdminForm,
     MenuForm,
     MenuItemForm,
+    PaymentCancelManyForm,
+    PaymentMarkPaidForm,
+    PaymentResolutionNoteForm,
     TaxAddOnCreateForm,
     TaxOverrideCreateForm,
     TaxTierCreateForm,
 )
+
+_ADMIN_PAYMENT_CANCELABLE_STATUSES = (
+    Payment.Status.CREATED,
+    Payment.Status.FAILED,
+    Payment.Status.REQUIRES_REVIEW,
+)
+_STRIPE_PAYMENT_MODES = (Payment.Mode.STRIPE_TEST, Payment.Mode.STRIPE_LIVE)
 
 
 @admin_required
@@ -398,6 +408,73 @@ def payments(request: HttpRequest) -> HttpResponse:
 
 
 @admin_required
+def payment_detail(request: HttpRequest, payment_id: int) -> HttpResponse:
+    payment = get_object_or_404(_admin_payment_queryset(), pk=payment_id)
+    cancel_form = PaymentResolutionNoteForm()
+    cancel_many_form = PaymentCancelManyForm()
+    mark_paid_form = PaymentMarkPaidForm()
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "cancel_payment":
+            cancel_form = PaymentResolutionNoteForm(request.POST)
+            if cancel_form.is_valid():
+                error = _cancel_payment(payment, request.user, cancel_form.cleaned_data["note"])
+                if error:
+                    messages.error(request, error)
+                else:
+                    messages.success(request, "Payment attempt cancelled.")
+                return redirect("adminui:payment-detail", payment_id=payment.id)
+        elif action == "cancel_related_payments":
+            cancel_many_form = PaymentCancelManyForm(request.POST)
+            if cancel_many_form.is_valid():
+                count = _cancel_related_payments(
+                    payment,
+                    request.user,
+                    cancel_many_form.cleaned_data["note"],
+                )
+                if count:
+                    messages.success(request, f"Cancelled {count} payment attempt(s).")
+                else:
+                    messages.warning(request, "No cancellable payment attempts were found.")
+                return redirect("adminui:payment-detail", payment_id=payment.id)
+        elif action == "mark_paid":
+            mark_paid_form = PaymentMarkPaidForm(request.POST)
+            if mark_paid_form.is_valid():
+                error = _mark_payment_paid(
+                    payment,
+                    request.user,
+                    mark_paid_form.cleaned_data["stripe_reference"],
+                    mark_paid_form.cleaned_data["note"],
+                )
+                if error:
+                    messages.error(request, error)
+                else:
+                    messages.success(request, "Payment marked paid.")
+                return redirect("adminui:payment-detail", payment_id=payment.id)
+        else:
+            messages.error(request, "Unknown payment action.")
+            return redirect("adminui:payment-detail", payment_id=payment.id)
+
+    payment = get_object_or_404(_admin_payment_queryset(), pk=payment_id)
+    return render(
+        request,
+        "adminui/payment_detail.html",
+        {
+            "cancel_form": cancel_form,
+            "cancel_many_form": cancel_many_form,
+            "cancelable_payment_count": _related_cancelable_payments(payment).count(),
+            "can_cancel": _can_cancel_payment(payment),
+            "can_mark_paid": _can_mark_payment_paid(payment),
+            "logs": payment.logs.all(),
+            "mark_paid_form": mark_paid_form,
+            "payment": payment,
+            "related_payments": _related_payments(payment),
+        },
+    )
+
+
+@admin_required
 def payment_add(request: HttpRequest) -> HttpResponse:
     form = ManualPaymentCreateForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
@@ -447,6 +524,149 @@ def payment_add(request: HttpRequest) -> HttpResponse:
             "form": form,
         },
     )
+
+
+def _admin_payment_queryset():
+    return Payment.objects.select_related("user", "camp_year", "created_by").prefetch_related(
+        "add_ons",
+    )
+
+
+def _can_cancel_payment(payment: Payment) -> bool:
+    return payment.status in _ADMIN_PAYMENT_CANCELABLE_STATUSES
+
+
+def _can_mark_payment_paid(payment: Payment) -> bool:
+    return payment.mode in _STRIPE_PAYMENT_MODES and payment.status not in {
+        Payment.Status.PAID,
+        Payment.Status.REFUNDED,
+    }
+
+
+def _related_payments(payment: Payment):
+    return Payment.objects.select_related("user", "camp_year", "created_by").filter(
+        user=payment.user,
+        camp_year=payment.camp_year,
+    )
+
+
+def _related_cancelable_payments(payment: Payment):
+    return _related_payments(payment).filter(status__in=_ADMIN_PAYMENT_CANCELABLE_STATUSES)
+
+
+def _cancel_payment(payment: Payment, admin_user: User, note: str) -> str:
+    with transaction.atomic():
+        locked_payment = Payment.objects.select_for_update().get(pk=payment.pk)
+        if not _can_cancel_payment(locked_payment):
+            return "This payment cannot be cancelled."
+        _cancel_locked_payment(locked_payment, admin_user, note, "admin_payment.cancel")
+    return ""
+
+
+def _cancel_related_payments(payment: Payment, admin_user: User, note: str) -> int:
+    with transaction.atomic():
+        payments_to_cancel = list(
+            Payment.objects.select_for_update()
+            .filter(
+                user=payment.user,
+                camp_year=payment.camp_year,
+                status__in=_ADMIN_PAYMENT_CANCELABLE_STATUSES,
+            )
+            .order_by("id")
+        )
+        for candidate in payments_to_cancel:
+            _cancel_locked_payment(candidate, admin_user, note, "admin_payment.cancel_all")
+    return len(payments_to_cancel)
+
+
+def _cancel_locked_payment(payment: Payment, admin_user: User, note: str, event_type: str) -> None:
+    payment.status = Payment.Status.CANCELLED
+    payment.save(update_fields=["status", "updated_at"])
+    PaymentLog.objects.create(
+        payment=payment,
+        level=PaymentLog.Level.INFO,
+        event_type=event_type,
+        mode=payment.mode,
+        message=_admin_payment_log_message("Payment cancelled", admin_user, note),
+        redacted_payload={"admin_user_id": admin_user.id, "action": event_type},
+    )
+
+
+def _mark_payment_paid(
+    payment: Payment,
+    admin_user: User,
+    stripe_reference: str,
+    note: str,
+) -> str:
+    stripe_reference = stripe_reference.strip()
+    with transaction.atomic():
+        locked_payment = Payment.objects.select_for_update().get(pk=payment.pk)
+        if not _can_mark_payment_paid(locked_payment):
+            return "This payment cannot be marked paid with this action."
+        if Payment.objects.filter(
+            user=locked_payment.user,
+            camp_year=locked_payment.camp_year,
+            status=Payment.Status.PAID,
+        ).exclude(pk=locked_payment.pk).exists():
+            return "This user already has a paid payment for this camp year."
+
+        update_fields = ["status", "paid_at", "updated_at"]
+        duplicate_reference_error = _set_stripe_reference(
+            locked_payment,
+            stripe_reference,
+            update_fields,
+        )
+        if duplicate_reference_error:
+            return duplicate_reference_error
+
+        locked_payment.status = Payment.Status.PAID
+        locked_payment.paid_at = timezone.now()
+        locked_payment.save(update_fields=update_fields)
+        PaymentLog.objects.create(
+            payment=locked_payment,
+            level=PaymentLog.Level.INFO,
+            event_type="admin_payment.mark_paid",
+            mode=locked_payment.mode,
+            message=(
+                _admin_payment_log_message("Payment marked paid", admin_user, note)
+                + f" Stripe reference: {stripe_reference}"
+            ),
+            redacted_payload={
+                "admin_user_id": admin_user.id,
+                "stripe_reference": stripe_reference,
+            },
+        )
+    return ""
+
+
+def _set_stripe_reference(
+    payment: Payment,
+    stripe_reference: str,
+    update_fields: list[str],
+) -> str:
+    if stripe_reference.startswith("pi_"):
+        if Payment.objects.filter(stripe_payment_intent_id=stripe_reference).exclude(
+            pk=payment.pk,
+        ).exists():
+            return "Another payment already uses this Stripe payment intent."
+        payment.stripe_payment_intent_id = stripe_reference
+        update_fields.append("stripe_payment_intent_id")
+    elif stripe_reference.startswith("cs_") and not payment.stripe_checkout_session_id:
+        if Payment.objects.filter(stripe_checkout_session_id=stripe_reference).exclude(
+            pk=payment.pk,
+        ).exists():
+            return "Another payment already uses this Stripe Checkout session."
+        payment.stripe_checkout_session_id = stripe_reference
+        update_fields.append("stripe_checkout_session_id")
+    return ""
+
+
+def _admin_payment_log_message(action: str, admin_user: User, note: str) -> str:
+    message = f"{action} by {admin_user.email}."
+    note = note.strip()
+    if note:
+        message = f"{message} Reason/reference: {note}"
+    return message
 
 
 @admin_required
