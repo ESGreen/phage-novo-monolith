@@ -5,7 +5,6 @@
 {% block content %}
   <div class="page-heading">
     <h1>{{ camp_year.year }} Dashboard</h1>
-    <p>Track your member steps for this camp year.</p>
   </div>
 
   {% if pre_html %}
@@ -16,6 +15,7 @@
 
   <section class="content-card dashboard-checklist">
     <h2>Registration Checklist</h2>
+    <p>Track your member steps for this camp year.</p>
     <ol class="dashboard-list">
       {% for item in dashboard_items %}
         <li class="dashboard-item dashboard-item--{{ item.state }}">
