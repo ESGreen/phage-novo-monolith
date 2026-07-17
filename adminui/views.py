@@ -33,7 +33,7 @@ from surveys.forms import (
     SurveyQuestionCreateForm,
     SurveyQuestionOptionsForm,
 )
-from surveys.models import Survey, SurveyAnswer, SurveyChoice, SurveyQuestion
+from surveys.models import Survey, SurveyAnswer, SurveyChoice, SurveyQuestion, SurveyResponse
 from surveys.question_types import is_choice_question_type
 from surveys.services import (
     duplicate_question,
@@ -1061,6 +1061,21 @@ def _condition_choice_cache(condition_form: SurveyConditionForm) -> dict[str, li
 @admin_required
 def survey_responses(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "delete_response":
+            response = get_object_or_404(
+                SurveyResponse.objects.select_related("user"),
+                pk=request.POST.get("response_id"),
+                survey=survey,
+            )
+            member_label = response.user.get_full_name() or response.user.email
+            response.delete()
+            messages.success(request, f"Deleted survey response from {member_label}.")
+            return redirect("adminui:survey-responses", slug=survey.slug)
+        messages.error(request, "Unknown survey response action.")
+        return redirect("adminui:survey-responses", slug=survey.slug)
+
     response_matrix = _survey_response_matrix(survey)
     return render(
         request,
@@ -1104,6 +1119,7 @@ def _survey_response_matrix(survey: Survey) -> dict[str, object]:
                 ],
                 "email": response.user.email,
                 "name": response.user.get_full_name(),
+                "response_id": response.id,
             }
         )
     return {"questions": questions, "rows": rows}

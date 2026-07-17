@@ -799,6 +799,7 @@ def test_survey_responses_page_renders_answer_matrix(client) -> None:
         member,
         FakePost({f"question_{question.id}": 'Hello, "camp"\nthere'}),
     )
+    survey_response = SurveyResponse.objects.get(survey=survey, user=member)
     deleted_question.delete()
     client.force_login(admin)
 
@@ -812,7 +813,76 @@ def test_survey_responses_page_renders_answer_matrix(client) -> None:
     assert "Missing" in body
     assert "Deleted" not in body
     assert 'Hello, &quot;camp&quot;' in body
+    assert "<th>Actions</th>" in body
+    assert 'value="delete_response"' in body
+    assert f'value="{survey_response.id}"' in body
+    assert 'class="danger-button"' in body
     assert 'href="/admin/surveys/arrival-survey/responses.csv"' in body
+
+
+def test_admin_can_delete_survey_response_and_answers(client) -> None:
+    admin = create_user()
+    member = create_user("member@example.com", is_admin=False)
+    survey = create_survey()
+    question = create_question(survey, "Bio")
+    submit_survey_response(survey, member, FakePost({f"question_{question.id}": "Hello"}))
+    survey_response = SurveyResponse.objects.get(survey=survey, user=member)
+    assert SurveyAnswer.objects.filter(response=survey_response).count() == 1
+    client.force_login(admin)
+
+    response = client.post(
+        "/admin/surveys/arrival-survey/responses/",
+        {"action": "delete_response", "response_id": str(survey_response.id)},
+        follow=True,
+    )
+
+    assert response.status_code == 200
+    assert b"Deleted survey response from member@example.com." in response.content
+    assert not SurveyResponse.objects.filter(pk=survey_response.pk).exists()
+    assert SurveyAnswer.objects.count() == 0
+
+
+def test_survey_response_delete_is_scoped_to_current_survey(client) -> None:
+    admin = create_user()
+    member = create_user("member@example.com", is_admin=False)
+    current_survey = create_survey()
+    other_survey = create_survey(name="Other Survey", slug="other-survey")
+    other_question = create_question(other_survey, "Bio")
+    submit_survey_response(
+        other_survey,
+        member,
+        FakePost({f"question_{other_question.id}": "Hello"}),
+    )
+    other_response = SurveyResponse.objects.get(survey=other_survey, user=member)
+    client.force_login(admin)
+
+    response = client.post(
+        "/admin/surveys/arrival-survey/responses/",
+        {"action": "delete_response", "response_id": str(other_response.id)},
+    )
+
+    assert response.status_code == 404
+    assert Survey.objects.filter(pk=current_survey.pk).exists()
+    assert SurveyResponse.objects.filter(pk=other_response.pk).exists()
+    assert SurveyAnswer.objects.filter(response=other_response).count() == 1
+
+
+def test_non_admin_cannot_delete_survey_response(client) -> None:
+    member = create_user("member@example.com", is_admin=False)
+    survey = create_survey()
+    question = create_question(survey, "Bio")
+    submit_survey_response(survey, member, FakePost({f"question_{question.id}": "Hello"}))
+    survey_response = SurveyResponse.objects.get(survey=survey, user=member)
+    client.force_login(member)
+
+    response = client.post(
+        "/admin/surveys/arrival-survey/responses/",
+        {"action": "delete_response", "response_id": str(survey_response.id)},
+    )
+
+    assert response.status_code == 403
+    assert SurveyResponse.objects.filter(pk=survey_response.pk).exists()
+    assert SurveyAnswer.objects.filter(response=survey_response).count() == 1
 
 
 def test_survey_export_outputs_response_matrix_and_escaped_values(client) -> None:

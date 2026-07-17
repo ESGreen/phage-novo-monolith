@@ -19,6 +19,7 @@
             <th>Name</th>
             <th>Email</th>
             {% for question in questions %}<th>{{ question.name }}</th>{% endfor %}
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -27,6 +28,14 @@
             <td>{{ response_row.name }}</td>
             <td>{{ response_row.email }}</td>
             {% for answer in response_row.answers %}<td>{{ answer }}</td>{% endfor %}
+            <td>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete_response">
+                <input type="hidden" name="response_id" value="{{ response_row.response_id }}">
+                <button class="danger-button" type="submit" aria-label="Delete response from {{ response_row.email }}">Delete</button>
+              </form>
+            </td>
           </tr>
         {% endfor %}
         </tbody>
