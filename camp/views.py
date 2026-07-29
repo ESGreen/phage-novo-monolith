@@ -8,6 +8,7 @@ from django.urls import reverse
 
 from accounts.permissions import member_required
 from content.markdown import render_markdown
+from content.media import get_profile_photo_derivative_url
 from payments.checkout import (
     CheckoutBlocked,
     create_tax_checkout,
@@ -159,6 +160,14 @@ def _tax_prerequisites_complete(user: object, camp_year: CampYear) -> bool:
     return is_profile_complete(user) and is_camp_survey_complete(user, camp_year)
 
 
+def _profile_photo_url(user: object) -> str:
+    photo = user.profile.photo
+    try:
+        return get_profile_photo_derivative_url(photo)
+    except OSError:
+        return photo.url
+
+
 @member_required
 def phagebook(request: HttpRequest, year: int) -> HttpResponse:
     camp_year = get_object_or_404(CampYear.objects.select_related("camp_survey"), year=year)
@@ -174,6 +183,7 @@ def phagebook(request: HttpRequest, year: int) -> HttpResponse:
             entries.append(
                 {
                     "user": user,
+                    "profile_photo_url": _profile_photo_url(user),
                     "bio_html": render_markdown(user.profile.bio_markdown),
                 },
             )

@@ -13,7 +13,13 @@
       {% for entry in entries %}
         <article class="content-card phagebook-entry">
           <h2 class="phagebook-entry__name">{{ entry.user.get_full_name|default:entry.user.email }}</h2>
-          <img class="phagebook-entry__photo" src="{{ entry.user.profile.photo.url }}" alt="Profile photo for {{ entry.user.get_full_name|default:entry.user.email }}">
+          <img
+            class="phagebook-entry__photo"
+            src="{{ entry.profile_photo_url }}"
+            alt="Profile photo for {{ entry.user.get_full_name|default:entry.user.email }}"
+            loading="lazy"
+            decoding="async"
+          >
           <p class="phagebook-entry__email"><a href="mailto:{{ entry.user.email }}">{{ entry.user.email }}</a></p>
           <div class="phagebook-entry__bio markdown-body">
             {{ entry.bio_html }}

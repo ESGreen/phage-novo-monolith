@@ -17,3 +17,4 @@ urlpatterns = [
 if settings.DEBUG:
     urlpatterns += static("/public/", document_root=settings.PUBLIC_ROOT)
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.DERIVED_MEDIA_URL, document_root=settings.DERIVED_MEDIA_ROOT)

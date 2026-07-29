@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from io import BytesIO
+
 import pytest
 from django.contrib.auth import get_user_model
+from django.core.files.storage import default_storage
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
+from PIL import Image
 
 from camp.models import CampYear, TaxOverride
+from content.media import create_media_item, profile_photo_derivative_path
 from content.models import MediaItem
 from payments.models import Payment
 from surveys.models import Survey, SurveyResponse
@@ -33,6 +39,15 @@ def create_profile_photo(user) -> MediaItem:
         content_type="image/png",
         size_bytes=1,
     )
+
+
+def image_upload(
+    name: str = "profile.jpg",
+    size: tuple[int, int] = (1200, 900),
+) -> SimpleUploadedFile:
+    output = BytesIO()
+    Image.new("RGB", size, "red").save(output, format="JPEG")
+    return SimpleUploadedFile(name, output.getvalue(), content_type="image/jpeg")
 
 
 def complete_profile(user, bio: str = "Ready for camp.") -> None:
@@ -201,3 +216,65 @@ def test_phagebook_renders_bio_markdown_safely(client) -> None:
     assert b"<h1>Bio</h1>" in response.content
     assert b"&lt;script&gt;" in response.content
     assert b"<script" not in response.content
+
+
+def test_phagebook_uses_profile_photo_derivative_url(client, settings, tmp_path) -> None:
+    settings.MEDIA_ROOT = str(tmp_path / "media")
+    settings.DERIVED_MEDIA_ROOT = tmp_path / "derived-media"
+    viewer = create_user(email="viewer@example.com", first_name="View", last_name="Only")
+    member = create_user(email="photo@example.com", first_name="Photo", last_name="Member")
+    camp_year = CampYear.objects.create(year=2026)
+    media_item = create_media_item(image_upload())
+    member.profile.photo = media_item
+    member.profile.bio_markdown = "Photo bio."
+    member.profile.save(update_fields=["photo", "bio_markdown", "updated_at"])
+    mark_taxes_paid(member, camp_year)
+    client.force_login(viewer)
+
+    response = client.get("/2026/phagebook/")
+    body = response.content.decode()
+
+    assert response.status_code == 200
+    assert f'/derived-media/profile_photos/{media_item.id}-768.jpg' in body
+    assert media_item.url not in body
+
+
+def test_phagebook_generates_missing_profile_photo_derivative(client, settings, tmp_path) -> None:
+    settings.MEDIA_ROOT = str(tmp_path / "media")
+    settings.DERIVED_MEDIA_ROOT = tmp_path / "derived-media"
+    viewer = create_user(email="viewer@example.com", first_name="View", last_name="Only")
+    member = create_user(email="photo@example.com", first_name="Photo", last_name="Member")
+    camp_year = CampYear.objects.create(year=2026)
+    media_item = create_media_item(image_upload())
+    member.profile.photo = media_item
+    member.profile.bio_markdown = "Photo bio."
+    member.profile.save(update_fields=["photo", "bio_markdown", "updated_at"])
+    mark_taxes_paid(member, camp_year)
+    client.force_login(viewer)
+
+    assert not profile_photo_derivative_path(media_item).exists()
+    response = client.get("/2026/phagebook/")
+
+    assert response.status_code == 200
+    assert profile_photo_derivative_path(media_item).exists()
+    assert default_storage.exists(media_item.file_path)
+
+
+def test_phagebook_images_are_lazy_loaded(client, settings, tmp_path) -> None:
+    settings.MEDIA_ROOT = str(tmp_path / "media")
+    settings.DERIVED_MEDIA_ROOT = tmp_path / "derived-media"
+    viewer = create_user(email="viewer@example.com", first_name="View", last_name="Only")
+    member = create_user(email="photo@example.com", first_name="Photo", last_name="Member")
+    camp_year = CampYear.objects.create(year=2026)
+    media_item = create_media_item(image_upload())
+    member.profile.photo = media_item
+    member.profile.bio_markdown = "Photo bio."
+    member.profile.save(update_fields=["photo", "bio_markdown", "updated_at"])
+    mark_taxes_paid(member, camp_year)
+    client.force_login(viewer)
+
+    response = client.get("/2026/phagebook/")
+
+    assert response.status_code == 200
+    assert b'loading="lazy"' in response.content
+    assert b'decoding="async"' in response.content

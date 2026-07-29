@@ -105,6 +105,8 @@ STATIC_ROOT = CONFIG.paths.static_root
 STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = "/media/"
 MEDIA_ROOT = CONFIG.paths.media_root
+DERIVED_MEDIA_URL = "/derived-media/"
+DERIVED_MEDIA_ROOT = BASE_DIR / "var" / "derived-media"
 PUBLIC_ROOT = CONFIG.paths.public_root
 TMP_ROOT = CONFIG.paths.tmp_root
 
