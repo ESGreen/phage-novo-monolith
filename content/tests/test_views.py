@@ -48,3 +48,40 @@ def test_missing_content_page_returns_404(client) -> None:
     response = client.get("/pages/missing/")
 
     assert response.status_code == 404
+
+
+def test_derived_media_requires_login(client, settings, tmp_path) -> None:
+    settings.DERIVED_MEDIA_ROOT = tmp_path / "derived-media"
+    image_path = settings.DERIVED_MEDIA_ROOT / "profile_photos" / "1-768.jpg"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"jpeg")
+
+    response = client.get("/derived-media/profile_photos/1-768.jpg")
+
+    assert response.status_code == 302
+    assert response["Location"] == "/login/?next=/derived-media/profile_photos/1-768.jpg"
+
+
+def test_member_can_view_derived_media(client, settings, tmp_path) -> None:
+    settings.DERIVED_MEDIA_ROOT = tmp_path / "derived-media"
+    image_path = settings.DERIVED_MEDIA_ROOT / "profile_photos" / "1-768.jpg"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"jpeg")
+    client.force_login(create_user())
+
+    response = client.get("/derived-media/profile_photos/1-768.jpg")
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "image/jpeg"
+    assert b"".join(response.streaming_content) == b"jpeg"
+
+
+def test_derived_media_blocks_path_traversal(client, settings, tmp_path) -> None:
+    settings.DERIVED_MEDIA_ROOT = tmp_path / "derived-media"
+    settings.DERIVED_MEDIA_ROOT.mkdir()
+    (tmp_path / "secret.jpg").write_bytes(b"secret")
+    client.force_login(create_user())
+
+    response = client.get("/derived-media/../secret.jpg")
+
+    assert response.status_code == 404
