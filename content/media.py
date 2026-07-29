@@ -14,7 +14,7 @@ from .models import MediaItem
 MAX_IMAGE_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
-ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "GIF", "WEBP"}
+ALLOWED_IMAGE_FORMATS = {"JPEG", "MPO", "PNG", "GIF", "WEBP"}
 
 
 def validate_image_upload(uploaded_file: UploadedFile) -> None:

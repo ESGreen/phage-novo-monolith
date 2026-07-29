@@ -3,7 +3,7 @@ from __future__ import annotations
 from django import forms
 from django.contrib.auth import authenticate
 
-from content.media import create_media_item
+from content.media import create_media_item, validate_image_upload
 
 from .models import MemberProfile, User
 
@@ -41,7 +41,7 @@ class EmailAuthenticationForm(forms.Form):
 
 
 class ProfilePhotoForm(forms.Form):
-    photo = forms.ImageField(
+    photo = forms.FileField(
         label="Photo",
         widget=forms.FileInput(
             attrs={
@@ -55,6 +55,11 @@ class ProfilePhotoForm(forms.Form):
         self.user = user
         self.profile, _ = MemberProfile.objects.get_or_create(user=user)
         super().__init__(*args, **kwargs)
+
+    def clean_photo(self):
+        photo = self.cleaned_data["photo"]
+        validate_image_upload(photo)
+        return photo
 
     def save(self) -> User:
         title = f"{self.user.get_full_name() or self.user.email} profile photo"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -13,6 +14,7 @@ from content.media import create_media_item
 pytestmark = pytest.mark.django_db
 
 PASSWORD = "test-password-1"
+PROFILE_PHOTO_FIXTURES_DIR = Path(__file__).resolve().parents[2] / "tests/fixtures/profile_photos"
 
 
 def create_user(email: str = "member@example.com", password: str = PASSWORD, **kwargs: object):
@@ -250,6 +252,30 @@ def test_member_can_replace_profile_photo(client, settings, tmp_path) -> None:
     assert default_storage.exists(media_item.file_path)
     response = client.get("/profile/")
     assert b"Replace Photo" in response.content
+
+
+def test_member_can_upload_mpo_profile_photo(client, settings, tmp_path) -> None:
+    settings.MEDIA_ROOT = str(tmp_path)
+    user = create_user()
+    client.force_login(user)
+    client.raise_request_exception = False
+    filename = "black-mpo.jpeg"
+
+    with (PROFILE_PHOTO_FIXTURES_DIR / filename).open("rb") as photo:
+        response = client.post(
+            "/profile/",
+            {
+                "action": "photo",
+                "photo": photo,
+            },
+        )
+
+    assert response.status_code == 302
+    user.profile.refresh_from_db()
+    media_item = user.profile.photo
+    assert media_item is not None
+    assert media_item.original_filename == filename
+    assert default_storage.exists(media_item.file_path)
 
 
 def test_profile_save_without_photo_keeps_existing_photo(client, settings, tmp_path) -> None:
