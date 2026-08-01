@@ -13,7 +13,6 @@
     "ABCDEFGHJKLMNPQRSTUVWXYZ",
     "abcdefghijkmnopqrstuvwxyz",
     "23456789",
-    "!#$%&*+-=?",
   ];
   const allPasswordChars = passwordGroups.join("");
 
