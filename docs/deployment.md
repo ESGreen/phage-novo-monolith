@@ -76,7 +76,6 @@ Application paths:
 ```text
 /opt/thephage/app
 /opt/thephage/venv
-/opt/thephage/scripts
 ```
 
 Configuration:
@@ -137,7 +136,7 @@ Adding `www-data` to the `phage` group lets Nginx connect to the Gunicorn Unix s
 Create directories:
 
 ```bash
-sudo mkdir -p /opt/thephage/app /opt/thephage/scripts /etc/thephage /var/www/thephage/public /var/www/thephage/static /var/www/thephage/media /var/tmp/thephage /var/backups/thephage
+sudo mkdir -p /opt/thephage/app /etc/thephage /var/www/thephage/public /var/www/thephage/static /var/www/thephage/media /var/tmp/thephage /var/backups/thephage
 ```
 
 Set ownership:
@@ -531,7 +530,8 @@ Type=oneshot
 User=phage
 Group=phage
 Environment=THEPHAGE_CONFIG=/etc/thephage/thephage.toml
-ExecStart=/opt/thephage/scripts/backup-thephage
+WorkingDirectory=/opt/thephage/app
+ExecStart=/opt/thephage/app/deploy/scripts/backup-thephage run
 ```
 
 Timer path:
@@ -581,7 +581,6 @@ Recommended ownership:
 /opt/thephage              phage:phage
 /opt/thephage/app          phage:phage
 /opt/thephage/venv         phage:phage
-/opt/thephage/scripts      phage:phage
 /var/www/thephage/public   phage:phage
 /var/www/thephage/static   phage:phage
 /var/www/thephage/media    phage:phage
@@ -596,7 +595,6 @@ Recommended directory modes:
 ```text
 /opt/thephage/app        0755
 /opt/thephage/venv       0755
-/opt/thephage/scripts    0755
 /var/www/thephage/public 0755
 /var/www/thephage/static 0755
 /var/www/thephage/media  0755

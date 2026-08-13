@@ -18,11 +18,11 @@ Backups are handled outside the Django web app.
 
 The web app should not know how to back itself up.
 
-V1 backup tooling uses external Python utility scripts:
+V1 backup tooling uses repo-owned Python utility scripts:
 
 ```text
-backup-thephage
-restore-thephage
+deploy/scripts/backup-thephage
+deploy/scripts/restore-thephage
 ```
 
 Backups are scheduled by the server, preferably with a systemd timer.
@@ -44,9 +44,9 @@ There are two backup layers:
 
 ## Backup Philosophy
 
-The backup system should be boring and external.
+The backup system should be boring and operational.
 
-The Django app should not perform backups because backups need access to:
+The Django request/response app should not perform backups because backups need access to:
 
 - PostgreSQL dump commands.
 - Deployment config files.
@@ -59,30 +59,31 @@ Those concerns belong to server operations, not request/response web application
 
 ## Backup Scripts
 
-The backup script should be an external Python utility.
+The backup script is a repo-owned Python utility.
 
 Script name:
 
 ```text
-backup-thephage
+deploy/scripts/backup-thephage
 ```
 
-The restore script should also be an external Python utility.
+The restore script is also a repo-owned Python utility.
 
 Script name:
 
 ```text
-restore-thephage
+deploy/scripts/restore-thephage
 ```
 
-Expected installed location:
+Expected production location within the git checkout:
 
 ```text
-/opt/thephage/scripts/backup-thephage
-/opt/thephage/scripts/restore-thephage
+/opt/thephage/app/deploy/scripts/backup-thephage
+/opt/thephage/app/deploy/scripts/restore-thephage
 ```
 
-These are the documented V1 paths. If deployment needs a different path, update this runbook and the systemd units together.
+Systemd should call these repo paths directly. Do not copy scripts into a separate
+directory; `git status` and `git pull` should reflect the operational code.
 
 ## Backup Scheduling
 
@@ -416,7 +417,8 @@ Instead, restore into scratch locations.
 Recommended scheduled verification:
 
 ```bash
-backup-thephage && restore-thephage verify --latest
+deploy/scripts/backup-thephage run
+deploy/scripts/restore-thephage verify-tools
 ```
 
 Verification should use:
@@ -623,13 +625,13 @@ Test should verify:
 Backup script path:
 
 ```text
-/opt/thephage/scripts/backup-thephage
+/opt/thephage/app/deploy/scripts/backup-thephage
 ```
 
 Restore script path:
 
 ```text
-/opt/thephage/scripts/restore-thephage
+/opt/thephage/app/deploy/scripts/restore-thephage
 ```
 
 Backup scheduler:
@@ -730,7 +732,8 @@ Type=oneshot
 User=phage
 Group=phage
 Environment=THEPHAGE_CONFIG=/etc/thephage/thephage.toml
-ExecStart=/opt/thephage/scripts/backup-thephage
+WorkingDirectory=/opt/thephage/app
+ExecStart=/opt/thephage/app/deploy/scripts/backup-thephage run
 ```
 
 Timer path:

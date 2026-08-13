@@ -39,6 +39,7 @@ include = [
   "camp*",
   "content*",
   "core*",
+  "deploy_tools*",
   "payments*",
   "surveys*",
 ]

@@ -10,6 +10,8 @@ VENV_ROOT="${THEPHAGE_VENV:-/opt/thephage/venv}"
 PYTHON="${VENV_ROOT}/bin/python"
 PIP="${VENV_ROOT}/bin/pip"
 MANAGE="${APP_ROOT}/manage.py"
+BACKUP_SCRIPT="${APP_ROOT}/deploy/scripts/backup-thephage"
+RESTORE_SCRIPT="${APP_ROOT}/deploy/scripts/restore-thephage"
 
 usage() {
   cat <<EOF
@@ -66,8 +68,12 @@ export THEPHAGE_CONFIG="${CONFIG_PATH}"
 
 require_file "${CONFIG_PATH}"
 require_file "${MANAGE}"
+require_file "${BACKUP_SCRIPT}"
+require_file "${RESTORE_SCRIPT}"
 require_executable "${PYTHON}"
 require_executable "${PIP}"
+require_executable "${BACKUP_SCRIPT}"
+require_executable "${RESTORE_SCRIPT}"
 
 cd "${APP_ROOT}"
 
@@ -81,6 +87,8 @@ run_step "Deployment config check" "${PYTHON}" "${MANAGE}" check_config
 run_step "Django system check" "${PYTHON}" "${MANAGE}" check
 run_step "Unapplied migration check" "${PYTHON}" "${MANAGE}" migrate --check
 run_step "Stripe config check" "${PYTHON}" "${MANAGE}" check_stripe
+run_step "Backup tool check" "${BACKUP_SCRIPT}" verify-tools
+run_step "Restore tool check" "${RESTORE_SCRIPT}" verify-tools
 
 run_step "Configured path check" "${PYTHON}" - <<'PY'
 from pathlib import Path
