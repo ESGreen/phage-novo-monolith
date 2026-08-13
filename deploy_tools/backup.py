@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import tarfile
@@ -35,6 +36,12 @@ def run_command(command: list[str]) -> None:
     subprocess.run(command, check=True)
 
 
+def run_pg_command(config: ThePhageConfig, command: list[str]) -> None:
+    env = os.environ.copy()
+    env["PGPASSWORD"] = config.database.password
+    subprocess.run(command, check=True, env=env)
+
+
 def pg_dump_command(config: ThePhageConfig, output_path: Path) -> list[str]:
     return [
         "pg_dump",
@@ -45,6 +52,30 @@ def pg_dump_command(config: ThePhageConfig, output_path: Path) -> list[str]:
         f"--file={output_path}",
         config.database.name,
     ]
+
+
+def validate_local_output_path(output_path: Path) -> None:
+    if not output_path.is_absolute():
+        raise SystemExit(
+            "Local --output must be an absolute path. "
+            "Use something like --output=/var/backups/thephage/snapshot.tar.gz.",
+        )
+    parent = output_path.parent
+    try:
+        parent.mkdir(parents=True, exist_ok=True)
+    except PermissionError as error:
+        raise SystemExit(
+            f"Cannot create output directory '{parent}': permission denied."
+        ) from error
+    try:
+        if not parent.is_dir():
+            raise SystemExit(f"Output parent is not a directory: {parent}")
+    except PermissionError as error:
+        raise SystemExit(
+            f"Cannot access output directory '{parent}': permission denied."
+        ) from error
+    if not os.access(parent, os.W_OK):
+        raise SystemExit(f"Output directory is not writable: {parent}")
 
 
 def s3_uri(bucket: str, prefix: str, *parts: str) -> str:
@@ -117,12 +148,12 @@ def add_media_to_tar(tar: tarfile.TarFile, media_root: Path, snapshot_name: str)
 
 
 def create_support_bundle(config: ThePhageConfig, output_path: Path, created_at: str) -> Path:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    validate_local_output_path(output_path)
     snapshot_name = f"thephage-snapshot-{created_at}"
     with tempfile.TemporaryDirectory(prefix="thephage-backup-") as temp_dir:
         temp_path = Path(temp_dir)
         database_dump = temp_path / "database.dump"
-        run_command(pg_dump_command(config, database_dump))
+        run_pg_command(config, pg_dump_command(config, database_dump))
         media_data = media_manifest(config.paths.media_root)
         manifest = {
             "created_at": created_at,
@@ -157,7 +188,7 @@ def run_normal_backup(config: ThePhageConfig, created_at: str) -> None:
 
     if config.backups.database_backups_enabled:
         database_dump = backup_root / f"{created_at}.dump"
-        run_command(pg_dump_command(config, database_dump))
+        run_pg_command(config, pg_dump_command(config, database_dump))
         run_command(
             [
                 "aws",

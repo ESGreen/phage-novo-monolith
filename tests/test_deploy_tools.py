@@ -83,6 +83,33 @@ def test_pg_dump_command_uses_custom_format(tmp_path) -> None:
     assert command[-1] == config.database.name
 
 
+def test_pg_dump_uses_configured_password_in_environment(monkeypatch, tmp_path) -> None:
+    config = configured_snapshot(tmp_path)
+    captured = {}
+
+    def fake_run(command: list[str], check: bool, env: dict[str, str]) -> None:
+        captured["command"] = command
+        captured["check"] = check
+        captured["env"] = env
+
+    monkeypatch.setattr(backup.subprocess, "run", fake_run)
+
+    command = backup.pg_dump_command(config, tmp_path / "database.dump")
+    backup.run_pg_command(config, command)
+
+    assert captured["command"] == command
+    assert captured["check"] is True
+    assert captured["env"]["PGPASSWORD"] == config.database.password
+    assert config.database.password not in command
+
+
+def test_local_output_must_be_absolute() -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        backup.validate_local_output_path(Path("b.tar.gz"))
+
+    assert "Local --output must be an absolute path" in str(exc_info.value)
+
+
 def test_support_bundle_contains_database_media_manifest_and_redacted_config(
     monkeypatch,
     tmp_path,
@@ -90,11 +117,11 @@ def test_support_bundle_contains_database_media_manifest_and_redacted_config(
     config = configured_snapshot(tmp_path)
     output_path = tmp_path / "snapshot.tar.gz"
 
-    def fake_run_command(command: list[str]) -> None:
+    def fake_run_pg_command(config, command: list[str]) -> None:
         file_arg = next(arg for arg in command if arg.startswith("--file="))
         Path(file_arg.removeprefix("--file=")).write_bytes(b"database")
 
-    monkeypatch.setattr(backup, "run_command", fake_run_command)
+    monkeypatch.setattr(backup, "run_pg_command", fake_run_pg_command)
 
     backup.create_support_bundle(config, output_path, "2026-08-13-1530")
 
@@ -118,11 +145,14 @@ def test_s3_output_uploads_single_support_bundle(monkeypatch, tmp_path) -> None:
 
     def fake_run_command(command: list[str]) -> None:
         commands.append(command)
-        file_arg = next((arg for arg in command if arg.startswith("--file=")), None)
-        if file_arg:
-            Path(file_arg.removeprefix("--file=")).write_bytes(b"database")
+
+    def fake_run_pg_command(config, command: list[str]) -> None:
+        commands.append(command)
+        file_arg = next(arg for arg in command if arg.startswith("--file="))
+        Path(file_arg.removeprefix("--file=")).write_bytes(b"database")
 
     monkeypatch.setattr(backup, "run_command", fake_run_command)
+    monkeypatch.setattr(backup, "run_pg_command", fake_run_pg_command)
 
     backup.run_backup("s3://bucket/support/snapshot.tar.gz", created_at="2026-08-13-1530")
 
@@ -136,11 +166,14 @@ def test_normal_backup_uses_configured_s3_layout(monkeypatch, tmp_path) -> None:
 
     def fake_run_command(command: list[str]) -> None:
         commands.append(command)
-        file_arg = next((arg for arg in command if arg.startswith("--file=")), None)
-        if file_arg:
-            Path(file_arg.removeprefix("--file=")).write_bytes(b"database")
+
+    def fake_run_pg_command(config, command: list[str]) -> None:
+        commands.append(command)
+        file_arg = next(arg for arg in command if arg.startswith("--file="))
+        Path(file_arg.removeprefix("--file=")).write_bytes(b"database")
 
     monkeypatch.setattr(backup, "run_command", fake_run_command)
+    monkeypatch.setattr(backup, "run_pg_command", fake_run_pg_command)
 
     backup.run_normal_backup(config, "2026-08-13-1530")
 
