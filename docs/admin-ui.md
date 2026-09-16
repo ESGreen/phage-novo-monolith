@@ -262,3 +262,31 @@ URL:
 ```
 
 Use this page to upload image media for Markdown pages and profiles. Uploaded media shows its site URL. Deleting media removes the database record and stored file.
+
+## Reimbursements
+
+Current-year admin URL:
+
+```text
+/admin/reimbursements/
+```
+
+Year-specific URL:
+
+```text
+/admin/<year>/reimbursements/
+```
+
+The annual page shows submitted and paid totals by category, paid expenses by
+person, submitted reimbursements, paid reimbursements, and rejected
+reimbursements. The paid-by-person table can be copied to a spreadsheet or
+downloaded as CSV.
+
+Submitted reimbursement detail pages let admins review notes and private
+receipt evidence, split selected expenses into a member draft, mark the
+reimbursement paid, reject it, or return it to draft. Rejected reimbursements
+may be returned to submitted or draft.
+
+Reimbursement categories are managed on `/admin/camp/<year>/` in the
+Reimbursement Categories card. Categories cannot be renamed and cannot be
+deleted while any reimbursement expense uses them.

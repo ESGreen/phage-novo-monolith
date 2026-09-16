@@ -104,6 +104,7 @@ def redacted_config(config: ThePhageConfig) -> dict[str, object]:
             "static_root": str(config.paths.static_root),
             "media_root": str(config.paths.media_root),
             "tmp_root": str(config.paths.tmp_root),
+            "reimbursement_receipt_root": str(config.paths.reimbursement_receipt_root),
         },
         "backups": {
             "database_backups_enabled": config.backups.database_backups_enabled,
@@ -237,6 +238,22 @@ def run_normal_backup(config: ThePhageConfig, created_at: str) -> None:
                 "sync",
                 f"{config.paths.media_root}/",
                 s3_uri(config.backups.s3_bucket, config.backups.s3_prefix, "media") + "/",
+                "--delete",
+            ]
+        )
+        run_command(
+            [
+                "aws",
+                "s3",
+                "sync",
+                f"{config.paths.reimbursement_receipt_root}/",
+                s3_uri(
+                    config.backups.s3_bucket,
+                    config.backups.s3_prefix,
+                    "private",
+                    "reimbursement-receipts",
+                )
+                + "/",
                 "--delete",
             ]
         )

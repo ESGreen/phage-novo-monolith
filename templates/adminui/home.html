@@ -32,12 +32,16 @@
           <td>Manage camp years, dashboard pages, tax tiers, tax add-ons, and tax overrides for yearly setup.</td>
         </tr>
         <tr>
-          <td><a class="secondary-button" href="{% url 'adminui:payments' %}">Payments</a></td>
-          <td>Review payment records and recent payment logs to confirm payments and investigate issues.</td>
-        </tr>
-        <tr>
           <td><a class="secondary-button" href="{% url 'adminui:stripe' %}">Stripe</a></td>
           <td>Switch Stripe test/live mode, check Stripe configuration, and delete local test payments before going live.</td>
+        </tr>
+        <tr>
+          <td><a class="secondary-button" href="{% url 'reimbursements:admin-current' %}">Reimbursements</a></td>
+          <td>Review submitted expenses, pay or reject reimbursements, and report paid camp expenses by category and member.</td>
+        </tr>
+        <tr>
+          <td><a class="secondary-button" href="{% url 'adminui:payments' %}">Payments</a></td>
+          <td>Review payment records and recent payment logs to confirm payments and investigate issues.</td>
         </tr>
         <tr>
           <td><a class="secondary-button" href="{% url 'adminui:pages' %}">Pages</a></td>

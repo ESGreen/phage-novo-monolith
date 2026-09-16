@@ -170,6 +170,7 @@ media_root = "/var/www/thephage/media"
 # This should be writable by the web app user.
 #
 tmp_root = "/var/tmp/thephage"
+reimbursement_receipt_root = "/var/lib/thephage/private/reimbursement-receipts"
 
 
 [stripe]

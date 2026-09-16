@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "content",
     "core",
     "payments",
+    "reimbursements",
     "surveys",
 ]
 
@@ -109,6 +110,7 @@ DERIVED_MEDIA_URL = "/derived-media/"
 DERIVED_MEDIA_ROOT = BASE_DIR / "var" / "derived-media"
 PUBLIC_ROOT = CONFIG.paths.public_root
 TMP_ROOT = CONFIG.paths.tmp_root
+REIMBURSEMENT_RECEIPT_ROOT = CONFIG.paths.reimbursement_receipt_root
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

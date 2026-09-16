@@ -92,6 +92,13 @@ Web file roots:
 /var/www/thephage/media
 ```
 
+Private reimbursement receipts are stored separately and are never served
+directly by Nginx:
+
+```text
+/var/lib/thephage/private/reimbursement-receipts
+```
+
 The application checkout under `/opt/thephage/app` is not the web root. Nginx serves only selected file roots under `/var/www/thephage`:
 
 - `/opt/thephage/app/public/` is source content copied to `/var/www/thephage/public/`.
@@ -136,13 +143,15 @@ Adding `www-data` to the `phage` group lets Nginx connect to the Gunicorn Unix s
 Create directories:
 
 ```bash
-sudo mkdir -p /opt/thephage/app /etc/thephage /var/www/thephage/public /var/www/thephage/static /var/www/thephage/media /var/tmp/thephage /var/backups/thephage
+sudo mkdir -p /opt/thephage/app /etc/thephage /var/www/thephage/public /var/www/thephage/static /var/www/thephage/media /var/lib/thephage/private/reimbursement-receipts /var/tmp/thephage /var/backups/thephage
 ```
 
 Set ownership:
 
 ```bash
 sudo chown -R phage:phage /opt/thephage /var/www/thephage /var/tmp/thephage /var/backups/thephage
+sudo chown -R phage:phage /var/lib/thephage
+sudo chmod 0700 /var/lib/thephage/private/reimbursement-receipts
 sudo chown root:phage /etc/thephage
 sudo chmod 0750 /etc/thephage
 ```
@@ -262,7 +271,7 @@ WorkingDirectory=/opt/thephage/app
 Environment=THEPHAGE_CONFIG=/etc/thephage/thephage.toml
 RuntimeDirectory=thephage
 RuntimeDirectoryMode=0755
-ExecStart=/opt/thephage/venv/bin/gunicorn thephage.wsgi:application --bind unix:/run/thephage/gunicorn.sock --umask 007 --workers 3 --timeout 60 --access-logfile - --error-logfile -
+ExecStart=/opt/thephage/app/deploy/scripts/start-thephage
 ExecReload=/bin/kill -s HUP $MAINPID
 Restart=on-failure
 RestartSec=5
@@ -311,7 +320,7 @@ server {
     listen [::]:80;
     server_name thephage.org www.thephage.org;
 
-    client_max_body_size 10M;
+    client_max_body_size 20M;
 
     location = / {
         return 302 /public/;

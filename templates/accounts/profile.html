@@ -1,11 +1,12 @@
 {% extends "member_base.html" %}
+{% load static %}
 
 {% block title %}Profile - The Phage{% endblock %}
 
 {% block content %}
   <div class="page-heading">
     <h1>Profile</h1>
-    <p>Update your photo, bio, email address, and password.</p>
+    <p>Update your photo, bio, email address, password, and reimbursement payment information.</p>
   </div>
 
   <section class="content-card">
@@ -82,6 +83,17 @@
   </section>
 
   <section class="content-card">
+    <h2>Reimbursement Payment</h2>
+    <p class="help-text">This information is copied into each reimbursement when you submit it.</p>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="action" value="reimbursement_payout">
+      {% include "reimbursements/_payout_profile_fields.html" %}
+      <button type="submit">Save Reimbursement Payment</button>
+    </form>
+  </section>
+
+  <section class="content-card">
     <h2>Password</h2>
     <form method="post" novalidate>
       {% csrf_token %}
@@ -119,4 +131,8 @@
       });
     }
   </script>
+{% endblock %}
+
+{% block scripts %}
+  <script src="{% static 'js/reimbursement-payout.js' %}" defer></script>
 {% endblock %}

@@ -15,6 +15,9 @@ def configured_snapshot(tmp_path: Path):
     media_root = tmp_path / "media"
     media_root.mkdir()
     (media_root / "profile.jpg").write_bytes(b"profile")
+    reimbursement_receipt_root = tmp_path / "reimbursement-receipts"
+    reimbursement_receipt_root.mkdir()
+    (reimbursement_receipt_root / "receipt.pdf").write_bytes(b"receipt")
     return config.__class__(
         path=config.path,
         site=config.site,
@@ -24,6 +27,7 @@ def configured_snapshot(tmp_path: Path):
             static_root=config.paths.static_root,
             media_root=media_root,
             tmp_root=config.paths.tmp_root,
+            reimbursement_receipt_root=reimbursement_receipt_root,
         ),
         stripe=config.stripe,
         backups=config.backups.__class__(
@@ -189,6 +193,11 @@ def test_normal_backup_uses_configured_s3_layout(monkeypatch, tmp_path) -> None:
         for destination in destinations
     )
     assert any(command[:3] == ["aws", "s3", "sync"] for command in commands)
+    assert any(
+        "private/reimbursement-receipts" in command[-2]
+        for command in commands
+        if command[:3] == ["aws", "s3", "sync"]
+    )
 
 
 @pytest.mark.parametrize("database", ["thephage", "thephage_prod", "production_snapshot"])

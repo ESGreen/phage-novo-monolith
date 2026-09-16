@@ -44,8 +44,9 @@ STATIC_ROOT="${RUNTIME_ROOT}/static"
 MEDIA_ROOT="${RUNTIME_ROOT}/media"
 TMP_ROOT="${RUNTIME_ROOT}/tmp"
 BACKUP_ROOT="${RUNTIME_ROOT}/backups"
+REIMBURSEMENT_RECEIPT_ROOT="${RUNTIME_ROOT}/private/reimbursement-receipts"
 
-mkdir -p "${PUBLIC_ROOT}" "${STATIC_ROOT}" "${MEDIA_ROOT}" "${TMP_ROOT}" "${BACKUP_ROOT}"
+mkdir -p "${PUBLIC_ROOT}" "${STATIC_ROOT}" "${MEDIA_ROOT}" "${TMP_ROOT}" "${BACKUP_ROOT}" "${REIMBURSEMENT_RECEIPT_ROOT}"
 
 if [[ "${CLEAR_RUNTIME}" == "true" ]]; then
   rm -f "${CONFIG_PATH}" "${SQLITE_PATH}" "${SQLITE_PATH}-shm" "${SQLITE_PATH}-wal"
@@ -72,6 +73,7 @@ public_root = "${PUBLIC_ROOT}"
 static_root = "${STATIC_ROOT}"
 media_root = "${MEDIA_ROOT}"
 tmp_root = "${TMP_ROOT}"
+reimbursement_receipt_root = "${REIMBURSEMENT_RECEIPT_ROOT}"
 
 [stripe]
 test_secret_key = "sk_test_dummy"

@@ -9,6 +9,10 @@ from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
+from reimbursements.forms import ReimbursementPayoutProfileForm
+from reimbursements.models import ReimbursementPayoutProfile
+from reimbursements.services import save_payout_profile
+
 from .forms import EmailAuthenticationForm, EmailChangeForm, ProfileBioForm, ProfilePhotoForm
 from .permissions import member_required
 
@@ -57,6 +61,8 @@ def profile_view(request: HttpRequest) -> HttpResponse:
     bio_form = ProfileBioForm(user=request.user)
     email_form = EmailChangeForm(user=request.user)
     password_form = PasswordChangeForm(user=request.user)
+    payout_profile = ReimbursementPayoutProfile.objects.filter(user=request.user).first()
+    payout_form = ReimbursementPayoutProfileForm(user=request.user, instance=payout_profile)
 
     if request.method == "POST":
         action = request.POST.get("action")
@@ -85,6 +91,16 @@ def profile_view(request: HttpRequest) -> HttpResponse:
                 update_session_auth_hash(request, user)
                 messages.success(request, "Password changed.")
                 return redirect("accounts:profile")
+        elif action == "reimbursement_payout":
+            payout_form = ReimbursementPayoutProfileForm(
+                request.POST,
+                user=request.user,
+                instance=payout_profile,
+            )
+            if payout_form.is_valid():
+                save_payout_profile(user=request.user, data=payout_form.cleaned_data)
+                messages.success(request, "Reimbursement payment information saved.")
+                return redirect("accounts:profile")
 
     return render(
         request,
@@ -94,5 +110,6 @@ def profile_view(request: HttpRequest) -> HttpResponse:
             "bio_form": bio_form,
             "email_form": email_form,
             "password_form": password_form,
+            "payout_form": payout_form,
         },
     )

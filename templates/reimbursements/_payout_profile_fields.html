@@ -1,0 +1,60 @@
+{{ payout_form.non_field_errors }}
+<div class="form-row">
+  {{ payout_form.method.label_tag }}
+  {{ payout_form.method }}
+  {{ payout_form.method.errors }}
+</div>
+
+<fieldset class="compact-fieldset" data-payout-fields="zelle">
+  <legend>Zelle</legend>
+  <p class="help-text">Enter the email address registered with Zelle.</p>
+  <div class="form-row">
+    {{ payout_form.zelle_email.label_tag }}
+    {{ payout_form.zelle_email }}
+    {{ payout_form.zelle_email.errors }}
+  </div>
+</fieldset>
+
+<fieldset class="compact-fieldset" data-payout-fields="paper_check">
+  <legend>Paper check</legend>
+  <p class="help-text">Paper checks can be mailed only to United States addresses.</p>
+  <div class="form-grid">
+    <div class="form-row">
+      {{ payout_form.check_payee_name.label_tag }}
+      {{ payout_form.check_payee_name }}
+      {{ payout_form.check_payee_name.errors }}
+    </div>
+    <div class="form-row">
+      {{ payout_form.check_address_line_1.label_tag }}
+      {{ payout_form.check_address_line_1 }}
+      {{ payout_form.check_address_line_1.errors }}
+    </div>
+    <div class="form-row">
+      {{ payout_form.check_address_line_2.label_tag }}
+      {{ payout_form.check_address_line_2 }}
+      {{ payout_form.check_address_line_2.errors }}
+    </div>
+    <div class="form-row">
+      {{ payout_form.check_city.label_tag }}
+      {{ payout_form.check_city }}
+      {{ payout_form.check_city.errors }}
+    </div>
+    <div class="form-row">
+      {{ payout_form.check_state.label_tag }}
+      {{ payout_form.check_state }}
+      {{ payout_form.check_state.errors }}
+    </div>
+    <div class="form-row">
+      {{ payout_form.check_postal_code.label_tag }}
+      {{ payout_form.check_postal_code }}
+      {{ payout_form.check_postal_code.errors }}
+    </div>
+  </div>
+</fieldset>
+
+<noscript>
+  <p class="help-text">
+    JavaScript is off. Both payment sections are shown; fill in only the section
+    selected above. Fields for the other method will be ignored when saved.
+  </p>
+</noscript>

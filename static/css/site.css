@@ -14,6 +14,139 @@
   --error-bg: #f7e3dd;
 }
 
+.reimbursement-report-heading {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.reimbursement-report-heading form {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.reimbursement-expenses-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.expense-category-column {
+  width: 24%;
+}
+
+.expense-description-column,
+.expense-form-description {
+  width: auto;
+}
+
+.expense-amount-column {
+  width: 10rem;
+}
+
+.expense-action-column {
+  width: 7rem;
+}
+
+.reimbursement-expense-form {
+  display: block;
+}
+
+.expense-form-top-row {
+  align-items: end;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(16rem, 1fr) minmax(10rem, 14rem);
+}
+
+.reimbursement-expense-form .form-row {
+  margin-bottom: 1rem;
+}
+
+.reimbursement-expense-form textarea {
+  min-height: 4.5rem;
+  resize: vertical;
+}
+
+.expense-form-action button {
+  width: auto;
+}
+
+.reimbursement-status-guide {
+  display: grid;
+  gap: 0.5rem 1rem;
+  grid-template-columns: max-content minmax(0, 1fr);
+  margin-bottom: 0;
+}
+
+.reimbursement-status-guide dt {
+  font-weight: 700;
+}
+
+.reimbursement-status-guide dd {
+  margin: 0;
+}
+
+.receipt-upload-form {
+  align-items: start;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(16rem, 1fr) minmax(16rem, 1fr) auto;
+}
+
+.receipt-upload-form .form-row {
+  margin-bottom: 0;
+}
+
+.receipt-upload-form textarea {
+  min-height: 2.75rem;
+  resize: vertical;
+}
+
+.receipt-upload-action {
+  align-self: end;
+}
+
+.split-rationale textarea {
+  width: 100%;
+}
+
+.reimbursement-final-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.reimbursement-final-actions form {
+  margin: 0;
+}
+
+@media (max-width: 700px) {
+  .reimbursement-report-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .expense-form-top-row {
+    grid-template-columns: 1fr;
+  }
+
+  .reimbursement-status-guide {
+    grid-template-columns: 1fr;
+  }
+
+  .receipt-upload-form {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .receipt-upload-form .form-row {
+    margin-bottom: 1rem;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

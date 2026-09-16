@@ -41,13 +41,14 @@ include = [
   "core*",
   "deploy_tools*",
   "payments*",
+  "reimbursements*",
   "surveys*",
 ]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "thephage.settings"
 python_files = ["test_*.py", "*_tests.py"]
-testpaths = ["tests", "accounts", "adminui", "camp", "content", "core", "payments", "surveys"]
+testpaths = ["tests", "accounts", "adminui", "camp", "content", "core", "payments", "reimbursements", "surveys"]
 markers = [
   "unit: fast isolated tests",
   "integration: cross-app or database-backed tests",

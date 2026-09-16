@@ -1,0 +1,29 @@
+{% extends "member_base.html" %}
+{% load money %}
+{% block title %}{{ camp_year.year }} Reimbursements{% endblock %}
+{% block content %}
+<h1>{{ camp_year.year }} Reimbursements</h1>
+<section class="content-card">
+  <h2>Status and Actions</h2>
+  <dl class="reimbursement-status-guide">
+    <dt>Draft</dt>
+    <dd>Still being prepared and will not be paid. Open it to add expenses and receipts, then submit it when finished.</dd>
+    <dt>Submitted</dt>
+    <dd>Waiting for camp review and payment. You may view it or unsubmit it if you need to make changes.</dd>
+    <dt>Paid</dt>
+    <dd>The reimbursement has been paid. You may view it, but no further member action is available.</dd>
+    <dt>Rejected</dt>
+    <dd>The reimbursement was rejected. You may view it and any admin notes; contact the camp with questions.</dd>
+  </dl>
+</section>
+<section class="content-card">
+  {% if reimbursements %}
+    <div class="table-scroll"><table><thead><tr><th>Reimbursement</th><th>Created</th><th>Submitted</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead><tbody>
+    {% for reimbursement in reimbursements %}
+      <tr><td><a href="{% url 'reimbursements:member-detail' camp_year.year reimbursement.reimbursement_number %}">{{ reimbursement.reimbursement_number }}</a></td><td>{{ reimbursement.created_at|date:"M j, Y" }}</td><td>{% if reimbursement.submitted_at %}{{ reimbursement.submitted_at|date:"M j, Y" }}{% endif %}</td><td>{{ reimbursement.total_cents|default:0|cents }}</td><td>{{ reimbursement.get_status_display }}</td><td>{% if reimbursement.status == 'draft' %}<a class="secondary-button" href="{% url 'reimbursements:member-detail' camp_year.year reimbursement.reimbursement_number %}">Edit</a><form method="post" action="{% url 'reimbursements:member-submit' camp_year.year reimbursement.reimbursement_number %}" class="inline-form">{% csrf_token %}<button>Submit</button></form>{% else %}<a class="secondary-button" href="{% url 'reimbursements:member-detail' camp_year.year reimbursement.reimbursement_number %}">View</a>{% endif %}{% if reimbursement.status == 'submitted' %}<form method="post" action="{% url 'reimbursements:member-unsubmit' camp_year.year reimbursement.reimbursement_number %}" class="inline-form">{% csrf_token %}<button class="secondary-button">Unsubmit</button></form>{% endif %}</td></tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% else %}<p>You do not have any reimbursements for {{ camp_year.year }}.</p>{% endif %}
+</section>
+<form method="post" action="{% url 'reimbursements:member-create' camp_year.year %}">{% csrf_token %}<button>Create Reimbursement</button></form>
+{% endblock %}

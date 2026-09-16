@@ -12,6 +12,7 @@ PIP="${VENV_ROOT}/bin/pip"
 MANAGE="${APP_ROOT}/manage.py"
 BACKUP_SCRIPT="${APP_ROOT}/deploy/scripts/backup-thephage"
 RESTORE_SCRIPT="${APP_ROOT}/deploy/scripts/restore-thephage"
+START_SCRIPT="${APP_ROOT}/deploy/scripts/start-thephage"
 
 usage() {
   cat <<EOF
@@ -70,10 +71,12 @@ require_file "${CONFIG_PATH}"
 require_file "${MANAGE}"
 require_file "${BACKUP_SCRIPT}"
 require_file "${RESTORE_SCRIPT}"
+require_file "${START_SCRIPT}"
 require_executable "${PYTHON}"
 require_executable "${PIP}"
 require_executable "${BACKUP_SCRIPT}"
 require_executable "${RESTORE_SCRIPT}"
+require_executable "${START_SCRIPT}"
 
 cd "${APP_ROOT}"
 
@@ -91,6 +94,7 @@ run_step "Backup tool check" "${BACKUP_SCRIPT}" verify-tools
 run_step "Restore tool check" "${RESTORE_SCRIPT}" verify-tools
 
 run_step "Configured path check" "${PYTHON}" - <<'PY'
+import os
 from pathlib import Path
 
 from thephage.config import load_config
@@ -101,6 +105,7 @@ paths = {
     "static_root": config.paths.static_root,
     "media_root": config.paths.media_root,
     "tmp_root": config.paths.tmp_root,
+    "reimbursement_receipt_root": config.paths.reimbursement_receipt_root,
     "local_backup_dir": config.backups.local_backup_dir,
 }
 
@@ -108,6 +113,8 @@ missing = []
 for label, path in paths.items():
     if not Path(path).is_dir():
         missing.append(f"{label}: {path}")
+    elif label == "reimbursement_receipt_root" and not os.access(path, os.W_OK):
+        missing.append(f"{label} is not writable: {path}")
 
 if missing:
     raise SystemExit("Missing configured directories:\n" + "\n".join(missing))

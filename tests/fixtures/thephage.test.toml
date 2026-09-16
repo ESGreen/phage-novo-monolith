@@ -17,6 +17,7 @@ public_root = "/tmp/thephage-test/public"
 static_root = "/tmp/thephage-test/static"
 media_root = "/tmp/thephage-test/media"
 tmp_root = "/tmp/thephage-test/tmp"
+reimbursement_receipt_root = "/tmp/thephage-test/private/reimbursement-receipts"
 
 [stripe]
 test_secret_key = "sk_test_dummy"

@@ -8,6 +8,7 @@ from django.contrib.auth.forms import SetPasswordForm
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Count, Max, Min, ProtectedError
+from django.db.models.functions import Lower
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -23,6 +24,8 @@ from camp.services import get_current_camp_year
 from content.models import ContentPage, MediaItem, Menu, MenuItem
 from core.models import SiteSettings
 from payments.models import Payment, PaymentAddOn, PaymentLog
+from reimbursements.forms import ReimbursementExpenseCategoryCreateForm
+from reimbursements.models import ReimbursementExpenseCategory
 from surveys.forms import (
     SurveyAdminForm,
     SurveyChoiceCreateForm,
@@ -243,6 +246,7 @@ def camp_year_edit(request: HttpRequest, year: int) -> HttpResponse:
     tax_tier_form = TaxTierCreateForm(camp_year=camp_year)
     tax_add_on_form = TaxAddOnCreateForm(camp_year=camp_year)
     tax_override_form = TaxOverrideCreateForm(camp_year=camp_year)
+    reimbursement_category_form = ReimbursementExpenseCategoryCreateForm(camp_year=camp_year)
 
     if request.method == "POST":
         action = request.POST.get("action")
@@ -254,6 +258,30 @@ def camp_year_edit(request: HttpRequest, year: int) -> HttpResponse:
                 updated_year.save()
                 messages.success(request, "Dashboard setup updated.")
                 return redirect(_camp_year_section_url(camp_year, "dashboard-setup"))
+        elif action == "reimbursement_category":
+            reimbursement_category_form = ReimbursementExpenseCategoryCreateForm(
+                request.POST,
+                camp_year=camp_year,
+            )
+            if reimbursement_category_form.is_valid():
+                reimbursement_category_form.save()
+                messages.success(request, "Reimbursement category created.")
+                return redirect(_camp_year_section_url(camp_year, "reimbursement-categories"))
+        elif action == "reimbursement_category_delete":
+            category = get_object_or_404(
+                ReimbursementExpenseCategory,
+                pk=request.POST.get("category_id"),
+                camp_year=camp_year,
+            )
+            try:
+                category.delete()
+                messages.success(request, "Reimbursement category deleted.")
+            except ProtectedError:
+                messages.error(
+                    request,
+                    "This reimbursement category is in use and cannot be deleted.",
+                )
+            return redirect(_camp_year_section_url(camp_year, "reimbursement-categories"))
         elif action == "tax_tier":
             tax_tier_form = TaxTierCreateForm(request.POST, camp_year=camp_year)
             if tax_tier_form.is_valid():
@@ -311,6 +339,12 @@ def camp_year_edit(request: HttpRequest, year: int) -> HttpResponse:
         {
             "camp_year": camp_year,
             "pages_form": pages_form,
+            "reimbursement_category_form": reimbursement_category_form,
+            "reimbursement_categories": ReimbursementExpenseCategory.objects.filter(
+                camp_year=camp_year
+            )
+            .annotate(usage_count=Count("expenses__reimbursement", distinct=True))
+            .order_by(Lower("name"), "id"),
             "tax_add_on_form": tax_add_on_form,
             "tax_add_ons": camp_year.tax_add_ons.order_by("display_order", "id"),
             "tax_override_form": tax_override_form,
@@ -488,9 +522,7 @@ def payment_add(request: HttpRequest) -> HttpResponse:
                 add_on_amount_cents=form.cleaned_data["add_on_amount_cents"],
                 total_amount_cents=form.cleaned_data["total_amount_cents"],
                 tax_tier_name_snapshot=form.cleaned_data["tax_tier_name_snapshot"],
-                tax_tier_minimum_cents_snapshot=form.cleaned_data[
-                    "effective_minimum_cents"
-                ],
+                tax_tier_minimum_cents_snapshot=form.cleaned_data["effective_minimum_cents"],
                 paid_at=timezone.now(),
                 note=form.cleaned_data["note"],
                 created_by=request.user,
@@ -603,11 +635,15 @@ def _mark_payment_paid(
         locked_payment = Payment.objects.select_for_update().get(pk=payment.pk)
         if not _can_mark_payment_paid(locked_payment):
             return "This payment cannot be marked paid with this action."
-        if Payment.objects.filter(
-            user=locked_payment.user,
-            camp_year=locked_payment.camp_year,
-            status=Payment.Status.PAID,
-        ).exclude(pk=locked_payment.pk).exists():
+        if (
+            Payment.objects.filter(
+                user=locked_payment.user,
+                camp_year=locked_payment.camp_year,
+                status=Payment.Status.PAID,
+            )
+            .exclude(pk=locked_payment.pk)
+            .exists()
+        ):
             return "This user already has a paid payment for this camp year."
 
         update_fields = ["status", "paid_at", "updated_at"]
@@ -645,16 +681,24 @@ def _set_stripe_reference(
     update_fields: list[str],
 ) -> str:
     if stripe_reference.startswith("pi_"):
-        if Payment.objects.filter(stripe_payment_intent_id=stripe_reference).exclude(
-            pk=payment.pk,
-        ).exists():
+        if (
+            Payment.objects.filter(stripe_payment_intent_id=stripe_reference)
+            .exclude(
+                pk=payment.pk,
+            )
+            .exists()
+        ):
             return "Another payment already uses this Stripe payment intent."
         payment.stripe_payment_intent_id = stripe_reference
         update_fields.append("stripe_payment_intent_id")
     elif stripe_reference.startswith("cs_") and not payment.stripe_checkout_session_id:
-        if Payment.objects.filter(stripe_checkout_session_id=stripe_reference).exclude(
-            pk=payment.pk,
-        ).exists():
+        if (
+            Payment.objects.filter(stripe_checkout_session_id=stripe_reference)
+            .exclude(
+                pk=payment.pk,
+            )
+            .exists()
+        ):
             return "Another payment already uses this Stripe Checkout session."
         payment.stripe_checkout_session_id = stripe_reference
         update_fields.append("stripe_checkout_session_id")
@@ -1051,8 +1095,7 @@ def _condition_choice_cache(condition_form: SurveyConditionForm) -> dict[str, li
     questions = condition_form.fields["depends_on_question"].queryset.prefetch_related("choices")
     return {
         str(question.id): [
-            {"id": str(choice.id), "label": choice.label}
-            for choice in question.choices.all()
+            {"id": str(choice.id), "label": choice.label} for choice in question.choices.all()
         ]
         for question in questions
     }
@@ -1458,9 +1501,7 @@ def _move_menu_item(menu: Menu, item_id: str | None, direction: str) -> None:
             menu=menu,
         )
         items = list(
-            MenuItem.objects.select_for_update()
-            .filter(menu=menu)
-            .order_by("display_order", "id"),
+            MenuItem.objects.select_for_update().filter(menu=menu).order_by("display_order", "id"),
         )
         current_index = next(
             index for index, candidate in enumerate(items) if candidate.pk == item.pk

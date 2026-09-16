@@ -8,6 +8,9 @@ Implementation is underway as a custom Django app. Maintainer runbooks live in `
 
 Start with `docs/admin-ui.md` for the current custom admin UI and `docs/yearly-rollover.md` for annual setup.
 
+The member reimbursement workflow and its annual admin reports are documented
+in `design_docs/Reimbursements.md`.
+
 ## Local Setup
 
 Create a virtualenv and install the project with development dependencies:

@@ -45,6 +45,7 @@ class PathsConfig:
     static_root: Path
     media_root: Path
     tmp_root: Path
+    reimbursement_receipt_root: Path
 
 
 @dataclass(frozen=True)
@@ -172,12 +173,22 @@ def _load_database(raw: dict[str, Any]) -> DatabaseConfig:
 
 def _load_paths(raw: dict[str, Any]) -> PathsConfig:
     section = _section(raw, "paths")
-    return PathsConfig(
+    paths = PathsConfig(
         public_root=Path(_required_str(section, "paths", "public_root")),
         static_root=Path(_required_str(section, "paths", "static_root")),
         media_root=Path(_required_str(section, "paths", "media_root")),
         tmp_root=Path(_required_str(section, "paths", "tmp_root")),
+        reimbursement_receipt_root=Path(
+            _required_str(section, "paths", "reimbursement_receipt_root")
+        ),
     )
+    if not paths.reimbursement_receipt_root.is_absolute():
+        raise ConfigError("[paths] reimbursement_receipt_root must be an absolute path")
+    media_root = paths.media_root.resolve()
+    receipt_root = paths.reimbursement_receipt_root.resolve()
+    if receipt_root == media_root or media_root in receipt_root.parents:
+        raise ConfigError("[paths] reimbursement_receipt_root must be outside media_root")
+    return paths
 
 
 def _load_stripe(raw: dict[str, Any]) -> StripeConfig:

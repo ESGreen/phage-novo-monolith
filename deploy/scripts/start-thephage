@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+VENV_ROOT="${THEPHAGE_VENV:-/opt/thephage/venv}"
+PYTHON="${VENV_ROOT}/bin/python"
+CONFIG_PATH="${THEPHAGE_CONFIG:-/etc/thephage/thephage.toml}"
+
+export THEPHAGE_CONFIG="${CONFIG_PATH}"
+
+if [[ ! -f "${CONFIG_PATH}" ]]; then
+  echo "STARTUP BLOCKED: configuration file does not exist." >&2
+  echo "File: ${CONFIG_PATH}" >&2
+  echo "Create it from ${APP_ROOT}/deploy/thephage.toml.example." >&2
+  exit 1
+fi
+
+cd "${APP_ROOT}"
+
+"${PYTHON}" - <<'PY'
+from pathlib import Path
+import os
+
+from thephage.config import load_config
+
+config = load_config()
+root = Path(config.paths.reimbursement_receipt_root)
+try:
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    os.chmod(root, 0o700)
+    probe = root / ".write-check"
+    probe.write_text("ok", encoding="utf-8")
+    probe.unlink()
+except PermissionError as exc:
+    raise SystemExit(
+        "STARTUP BLOCKED: private receipt directory cannot be created.\n\n"
+        f"Path:\n  {root}\n\n"
+        "Required command:\n"
+        f"  sudo install -d -o phage -g phage -m 0700 {root}\n\n"
+        "Why:\n  Reimbursement receipts must remain outside public media."
+    ) from exc
+PY
+
+"${PYTHON}" manage.py migrate --noinput
+"${PYTHON}" manage.py collectstatic --noinput
+"${PYTHON}" manage.py check
+"${PYTHON}" manage.py migrate --check
+
+exec "${VENV_ROOT}/bin/gunicorn" thephage.wsgi:application \
+  --bind unix:/run/thephage/gunicorn.sock \
+  --umask 007 \
+  --workers 3 \
+  --timeout 60 \
+  --access-logfile - \
+  --error-logfile -

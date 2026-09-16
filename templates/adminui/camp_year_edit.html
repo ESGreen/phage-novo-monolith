@@ -276,6 +276,19 @@
       <button type="submit">Create Tax Override</button>
     </form>
   </section>
+
+  <section id="reimbursement-categories" class="content-card">
+    <h2>Reimbursement Categories</h2>
+    {% if reimbursement_categories %}
+      <table><thead><tr><th>Category</th><th>Usage</th><th>Action</th></tr></thead><tbody>
+      {% for category in reimbursement_categories %}
+        <tr><td>{{ category.name }}</td><td>{{ category.usage_count }}</td><td>{% if category.usage_count %}In use{% else %}<form method="post" action="{% url 'adminui:camp-year-edit' camp_year.year %}#reimbursement-categories">{% csrf_token %}<input type="hidden" name="action" value="reimbursement_category_delete"><input type="hidden" name="category_id" value="{{ category.id }}"><button class="danger-button">Delete</button></form>{% endif %}</td></tr>
+      {% endfor %}
+      </tbody></table>
+    {% else %}<p>No reimbursement categories are configured for {{ camp_year.year }}.</p>{% endif %}
+    <h3>Add Reimbursement Category</h3>
+    <form method="post" action="{% url 'adminui:camp-year-edit' camp_year.year %}#reimbursement-categories">{% csrf_token %}<input type="hidden" name="action" value="reimbursement_category">{{ reimbursement_category_form.as_p }}<button>Add Category</button></form>
+  </section>
 {% endblock %}
 
 {% block scripts %}

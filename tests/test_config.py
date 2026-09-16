@@ -15,6 +15,9 @@ def test_load_config_reads_all_sections() -> None:
     assert config.site.timezone == "America/Los_Angeles"
     assert config.database.name == "thephage_test"
     assert config.paths.media_root == Path("/tmp/thephage-test/media")
+    assert config.paths.reimbursement_receipt_root == Path(
+        "/tmp/thephage-test/private/reimbursement-receipts"
+    )
     assert config.stripe.test_secret_key == "sk_test_dummy"
     assert config.backups.s3_bucket == "web2-backups-thephage"
     assert config.backups.media_retention_days == 45
@@ -54,6 +57,7 @@ public_root = "/tmp/public"
 static_root = "/tmp/static"
 media_root = "/tmp/media"
 tmp_root = "/tmp/tmp"
+reimbursement_receipt_root = "/tmp/private/reimbursement-receipts"
 
 [stripe]
 test_secret_key = "sk_test_dummy"
@@ -82,4 +86,16 @@ region = "us-west-2"
     )
 
     with pytest.raises(ConfigError, match="EC2 IAM role"):
+        load_config(config_path)
+
+
+def test_reimbursement_receipt_root_must_be_outside_media(tmp_path: Path) -> None:
+    config_text = FIXTURE_CONFIG.read_text(encoding="utf-8").replace(
+        'reimbursement_receipt_root = "/tmp/thephage-test/private/reimbursement-receipts"',
+        'reimbursement_receipt_root = "/tmp/thephage-test/media/receipts"',
+    )
+    config_path = tmp_path / "unsafe.toml"
+    config_path.write_text(config_text, encoding="utf-8")
+
+    with pytest.raises(ConfigError, match="outside media_root"):
         load_config(config_path)

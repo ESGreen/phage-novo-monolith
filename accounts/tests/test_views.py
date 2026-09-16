@@ -115,6 +115,9 @@ def test_profile_page_renders_for_member(client) -> None:
     assert b"Load Photo" in response.content
     assert b"Basic Bio" in response.content
     assert b"Email" in response.content
+    assert b"Reimbursement Payment" in response.content
+    assert b'data-payout-fields="zelle"' in response.content
+    assert b'data-payout-fields="paper_check"' in response.content
     assert b"Change Password" in response.content
 
 
