@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import tarfile
 from pathlib import Path
 
@@ -198,6 +199,95 @@ def test_normal_backup_uses_configured_s3_layout(monkeypatch, tmp_path) -> None:
         for command in commands
         if command[:3] == ["aws", "s3", "sync"]
     )
+
+
+def test_portable_snapshot_contains_database_media_and_private_receipts(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    config = configured_snapshot(tmp_path)
+    output_path = tmp_path / "portable.tar.gz"
+
+    def fake_run_pg_command(config, command: list[str]) -> None:
+        file_arg = next(arg for arg in command if arg.startswith("--file="))
+        Path(file_arg.removeprefix("--file=")).write_bytes(b"database")
+
+    monkeypatch.setattr(backup, "run_pg_command", fake_run_pg_command)
+    monkeypatch.setattr(backup, "git_commit", lambda app_root: "abc123")
+    monkeypatch.setattr(backup, "migration_inventory", lambda app_root, config_path: ["[X] a.0001"])
+
+    backup.create_portable_snapshot(
+        config,
+        output_path,
+        "2026-09-17T120000Z",
+        app_root=tmp_path,
+    )
+
+    with tarfile.open(output_path, "r:gz") as tar:
+        root = "thephage-snapshot-2026-09-17T120000Z"
+        names = set(tar.getnames())
+        assert f"{root}/database.dump" in names
+        assert f"{root}/media/profile.jpg" in names
+        assert f"{root}/private/reimbursement-receipts/receipt.pdf" in names
+        assert not any("/public/" in name for name in names)
+        manifest_file = tar.extractfile(f"{root}/manifest.json")
+        assert manifest_file is not None
+        manifest = json.load(manifest_file)
+        assert manifest["format"] == backup.SNAPSHOT_FORMAT
+        assert manifest["git_commit"] == "abc123"
+        assert manifest["trees"]["media"]["file_count"] == 1
+        assert manifest["trees"]["reimbursement_receipts"]["file_count"] == 1
+        config_file = tar.extractfile(f"{root}/local-config-template.toml")
+        assert config_file is not None
+        config_text = config_file.read().decode()
+        assert config.database.password not in config_text
+        assert config.stripe.live_secret_key not in config_text
+
+
+def test_portable_snapshot_refuses_existing_output(monkeypatch, tmp_path) -> None:
+    config = configured_snapshot(tmp_path)
+    output_path = tmp_path / "portable.tar.gz"
+    output_path.write_bytes(b"existing")
+
+    with pytest.raises(SystemExit, match="Refusing to overwrite"):
+        backup.create_portable_snapshot(config, output_path, "2026-09-17T120000Z")
+
+
+def test_generated_local_config_uses_restored_paths(tmp_path) -> None:
+    snapshot_root = tmp_path / "restored"
+    runtime_root = tmp_path / "runtime"
+    config_text = restore.generated_local_config(
+        snapshot_root=snapshot_root,
+        runtime_root=runtime_root,
+        database="thephage_snapshot_test",
+        host="127.0.0.1",
+        port=5432,
+        user="localuser",
+        password="localpass",
+        web_port=8123,
+        timezone="America/Los_Angeles",
+    )
+
+    assert 'base_url = "http://127.0.0.1:8123"' in config_text
+    assert f'media_root = "{snapshot_root / "media"}"' in config_text
+    assert "private/reimbursement-receipts" in config_text
+    assert 'live_secret_key = "disabled"' in config_text
+
+
+def test_portable_restore_command_uses_transactional_safety(tmp_path) -> None:
+    command = restore.pg_restore_command("thephage_snapshot_test", tmp_path / "database.dump")
+    assert "--exit-on-error" in command
+    assert "--single-transaction" in command
+    assert "--no-owner" in command
+    assert "--no-privileges" in command
+
+
+def test_snapshot_database_name_is_restricted() -> None:
+    restore.assert_snapshot_database_name("thephage_snapshot_test")
+    with pytest.raises(SystemExit):
+        restore.assert_snapshot_database_name("thephage")
+    with pytest.raises(SystemExit):
+        restore.assert_snapshot_database_name("postgresql://server/db")
 
 
 @pytest.mark.parametrize("database", ["thephage", "thephage_prod", "production_snapshot"])

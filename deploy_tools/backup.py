@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -20,6 +21,10 @@ class Destination:
     value: str
 
 
+SNAPSHOT_FORMAT = "thephage-portable-snapshot"
+SNAPSHOT_VERSION = 1
+
+
 def parse_destination(output: str | None) -> Destination:
     if not output:
         return Destination("normal", "")
@@ -29,7 +34,7 @@ def parse_destination(output: str | None) -> Destination:
 
 
 def timestamp() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%d-%H%M")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H%M%SZ")
 
 
 def run_command(command: list[str]) -> None:
@@ -136,6 +141,33 @@ def media_manifest(media_root: Path) -> dict[str, object]:
     }
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def tree_inventory(root: Path) -> dict[str, object]:
+    files = []
+    total_bytes = 0
+    if root.is_dir():
+        for path in sorted(root.rglob("*")):
+            if not path.is_file():
+                continue
+            size = path.stat().st_size
+            total_bytes += size
+            files.append(
+                {
+                    "path": path.relative_to(root).as_posix(),
+                    "size_bytes": size,
+                    "sha256": sha256_file(path),
+                }
+            )
+    return {"file_count": len(files), "total_bytes": total_bytes, "files": files}
+
+
 def write_json(path: Path, data: dict[str, object]) -> None:
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -146,6 +178,168 @@ def add_media_to_tar(tar: tarfile.TarFile, media_root: Path, snapshot_name: str)
     for path in media_root.rglob("*"):
         if path.is_file():
             tar.add(path, arcname=f"{snapshot_name}/media/{path.relative_to(media_root)}")
+
+
+def add_tree_to_tar(
+    tar: tarfile.TarFile,
+    source_root: Path,
+    archive_root: str,
+) -> None:
+    if not source_root.is_dir():
+        return
+    for path in source_root.rglob("*"):
+        if path.is_file():
+            tar.add(path, arcname=f"{archive_root}/{path.relative_to(source_root)}")
+
+
+def git_commit(app_root: Path) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(app_root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
+def migration_inventory(app_root: Path, config_path: Path) -> list[str]:
+    env = os.environ.copy()
+    env["THEPHAGE_CONFIG"] = str(config_path)
+    result = subprocess.run(
+        [
+            str(app_root / ".venv" / "bin" / "python"),
+            str(app_root / "manage.py"),
+            "showmigrations",
+            "--plan",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def local_config_template(config: ThePhageConfig) -> str:
+    timezone = config.site.timezone.replace('"', "")
+    return f'''[site]
+base_url = "http://127.0.0.1:8000"
+secret_key = "GENERATED_BY_LOCAL_RESTORE"
+debug = true
+allowed_hosts = ["127.0.0.1", "localhost", "testserver"]
+timezone = "{timezone}"
+
+[database]
+host = "127.0.0.1"
+port = 5432
+name = "GENERATED_BY_LOCAL_RESTORE"
+user = "GENERATED_BY_LOCAL_RESTORE"
+password = ""
+
+[paths]
+public_root = "GENERATED_BY_LOCAL_RESTORE"
+static_root = "GENERATED_BY_LOCAL_RESTORE"
+media_root = "GENERATED_BY_LOCAL_RESTORE"
+tmp_root = "GENERATED_BY_LOCAL_RESTORE"
+reimbursement_receipt_root = "GENERATED_BY_LOCAL_RESTORE"
+
+[stripe]
+test_secret_key = "sk_test_dummy"
+test_publishable_key = "pk_test_dummy"
+test_webhook_secret = "whsec_test_dummy"
+live_secret_key = "disabled"
+live_publishable_key = "disabled"
+live_webhook_secret = "disabled"
+
+[backups]
+database_backups_enabled = false
+config_backups_enabled = false
+media_backups_enabled = false
+s3_bucket = "disabled"
+s3_prefix = "disabled"
+local_backup_dir = "GENERATED_BY_LOCAL_RESTORE"
+database_retention_days = 0
+config_retention_days = 0
+media_retention_days = 0
+config_paths = []
+'''
+
+
+def create_portable_snapshot(
+    config: ThePhageConfig,
+    output_path: Path,
+    created_at: str,
+    *,
+    app_root: Path | None = None,
+) -> Path:
+    validate_local_output_path(output_path)
+    if output_path.exists():
+        raise SystemExit(f"Refusing to overwrite existing snapshot: {output_path}")
+    app_root = app_root or Path(__file__).resolve().parents[1]
+    snapshot_name = f"thephage-snapshot-{created_at}"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="thephage-portable-snapshot-",
+        dir=output_path.parent,
+    ) as temp_dir:
+        temp_path = Path(temp_dir)
+        database_dump = temp_path / "database.dump"
+        manifest_path = temp_path / "manifest.json"
+        config_path = temp_path / "local-config-template.toml"
+        staged_archive = temp_path / "snapshot.tar.gz"
+
+        run_pg_command(config, pg_dump_command(config, database_dump))
+        config_path.write_text(local_config_template(config), encoding="utf-8")
+        manifest = {
+            "format": SNAPSHOT_FORMAT,
+            "version": SNAPSHOT_VERSION,
+            "created_at": created_at,
+            "git_commit": git_commit(app_root),
+            "timezone": config.site.timezone,
+            "database": {
+                "name": config.database.name,
+                "dump_format": "postgres-custom",
+                "size_bytes": database_dump.stat().st_size,
+                "sha256": sha256_file(database_dump),
+            },
+            "trees": {
+                "media": tree_inventory(config.paths.media_root),
+                "reimbursement_receipts": tree_inventory(
+                    config.paths.reimbursement_receipt_root
+                ),
+            },
+            "migrations": migration_inventory(app_root, config.path),
+        }
+        write_json(manifest_path, manifest)
+
+        with tarfile.open(staged_archive, "w:gz") as tar:
+            tar.add(database_dump, arcname=f"{snapshot_name}/database.dump")
+            tar.add(manifest_path, arcname=f"{snapshot_name}/manifest.json")
+            tar.add(
+                config_path,
+                arcname=f"{snapshot_name}/local-config-template.toml",
+            )
+            add_tree_to_tar(tar, config.paths.media_root, f"{snapshot_name}/media")
+            add_tree_to_tar(
+                tar,
+                config.paths.reimbursement_receipt_root,
+                f"{snapshot_name}/private/reimbursement-receipts",
+            )
+
+        with tarfile.open(staged_archive, "r:gz") as tar:
+            names = set(tar.getnames())
+            required = {
+                f"{snapshot_name}/database.dump",
+                f"{snapshot_name}/manifest.json",
+                f"{snapshot_name}/local-config-template.toml",
+            }
+            if not required <= names:
+                raise SystemExit("Portable snapshot verification failed")
+        os.chmod(staged_archive, 0o600)
+        os.replace(staged_archive, output_path)
+    print(f"Created snapshot: {output_path}")
+    print(f"SHA-256: {sha256_file(output_path)}")
+    return output_path
 
 
 def create_support_bundle(config: ThePhageConfig, output_path: Path, created_at: str) -> Path:
@@ -311,6 +505,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         help="Optional local tarball path or s3:// URI for a single support snapshot.",
     )
+    snapshot_parser = subparsers.add_parser(
+        "snapshot",
+        help="Create one portable production snapshot for local diagnosis.",
+    )
+    snapshot_parser.add_argument(
+        "--output",
+        required=True,
+        help="Absolute local tarball path or s3:// URI.",
+    )
     subparsers.add_parser("verify-tools", help="Verify required backup tools are available.")
     return parser
 
@@ -323,6 +526,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "run":
         run_backup(args.output)
+        return 0
+    if args.command == "snapshot":
+        output_is_s3 = args.output.startswith("s3://")
+        verify_tools(needs_s3=output_is_s3)
+        created_at = timestamp()
+        if output_is_s3:
+            with tempfile.TemporaryDirectory(prefix="thephage-portable-upload-") as temp_dir:
+                snapshot_path = Path(temp_dir) / f"thephage-snapshot-{created_at}.tar.gz"
+                create_portable_snapshot(load_config(), snapshot_path, created_at)
+                run_command(["aws", "s3", "cp", str(snapshot_path), args.output])
+                print(f"Uploaded snapshot: {args.output}")
+            return 0
+        create_portable_snapshot(load_config(), Path(args.output), created_at)
         return 0
     raise SystemExit(f"Unknown command: {args.command}")
 

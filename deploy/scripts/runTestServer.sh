@@ -12,16 +12,29 @@ if [[ ! -x "${PYTHON}" ]]; then
 fi
 
 CLEAR_RUNTIME=false
+SNAPSHOT_SOURCE=""
+SNAPSHOT_ADMIN_EMAIL="phage@phage.com"
+SNAPSHOT_ADMIN_PASSWORD=""
 for arg in "$@"; do
   case "${arg}" in
     --clear)
       CLEAR_RUNTIME=true
       ;;
+    --snapshot=*)
+      SNAPSHOT_SOURCE="${arg#*=}"
+      ;;
+    --admin-email=*)
+      SNAPSHOT_ADMIN_EMAIL="${arg#*=}"
+      ;;
+    --admin-password=*)
+      SNAPSHOT_ADMIN_PASSWORD="${arg#*=}"
+      ;;
     --help|-h)
-      echo "Usage: $0 [--clear]"
+      echo "Usage: $0 [--clear] [--snapshot=PATH_OR_S3_URI] [--admin-email=EMAIL] [--admin-password=PASSWORD]"
       echo
       echo "Runs a local test server using /tmp/thephage-test-server."
       echo "  --clear  Remove and recreate the local TOML config and SQLite database."
+      echo "  --snapshot  Restore a portable production snapshot into local PostgreSQL."
       exit 0
       ;;
     *)
@@ -36,6 +49,93 @@ RUNTIME_ROOT="/tmp/thephage-test-server"
 HOST="${THEPHAGE_TEST_SERVER_HOST:-127.0.0.1}"
 PORT="${THEPHAGE_TEST_SERVER_PORT:-8000}"
 LINK_HOST="127.0.0.1"
+
+if [[ -n "${SNAPSHOT_SOURCE}" ]]; then
+  if [[ "${HOST}" != "127.0.0.1" && "${HOST}" != "localhost" ]]; then
+    echo "Snapshot mode only permits loopback hosts." >&2
+    exit 1
+  fi
+  for tool in pg_restore createdb dropdb; do
+    if ! command -v "${tool}" >/dev/null 2>&1; then
+      echo "Snapshot mode requires ${tool}." >&2
+      exit 1
+    fi
+  done
+
+  SNAPSHOT_RUNTIME_ROOT="/tmp/thephage-snapshot-server"
+  DB_HOST="${THEPHAGE_SNAPSHOT_DB_HOST:-127.0.0.1}"
+  DB_PORT="${THEPHAGE_SNAPSHOT_DB_PORT:-5432}"
+  DB_USER="${THEPHAGE_SNAPSHOT_DB_USER:-${USER}}"
+  DB_PASSWORD="${THEPHAGE_SNAPSHOT_DB_PASSWORD:-}"
+  DB_SUFFIX="$(date -u +%Y%m%d_%H%M%S)"
+  SNAPSHOT_DATABASE="thephage_snapshot_${DB_SUFFIX}"
+
+  if [[ "${CLEAR_RUNTIME}" == "true" ]]; then
+    rm -rf "${SNAPSHOT_RUNTIME_ROOT}"
+  fi
+
+  "${PROJECT_ROOT}/deploy/scripts/restore-thephage" prepare-test-server \
+    --source="${SNAPSHOT_SOURCE}" \
+    --database="${SNAPSHOT_DATABASE}" \
+    --runtime-root="${SNAPSHOT_RUNTIME_ROOT}" \
+    --database-host="${DB_HOST}" \
+    --database-port="${DB_PORT}" \
+    --database-user="${DB_USER}" \
+    --database-password="${DB_PASSWORD}" \
+    --web-port="${PORT}"
+
+  CONFIG_PATH="${SNAPSHOT_RUNTIME_ROOT}/thephage.toml"
+  export THEPHAGE_CONFIG="${CONFIG_PATH}"
+  unset THEPHAGE_SQLITE_PATH
+  export PGPASSWORD="${DB_PASSWORD}"
+
+  "${PYTHON}" "${PROJECT_ROOT}/manage.py" migrate --noinput
+  "${PYTHON}" "${PROJECT_ROOT}/manage.py" collectstatic --noinput
+  "${PYTHON}" "${PROJECT_ROOT}/manage.py" check
+
+  if [[ -z "${SNAPSHOT_ADMIN_PASSWORD}" ]]; then
+    SNAPSHOT_ADMIN_PASSWORD="$(${PYTHON} -c 'import secrets; print(secrets.token_urlsafe(12))')"
+  fi
+  SNAPSHOT_ADMIN_EMAIL="${SNAPSHOT_ADMIN_EMAIL}" \
+  SNAPSHOT_ADMIN_PASSWORD="${SNAPSHOT_ADMIN_PASSWORD}" \
+  "${PYTHON}" "${PROJECT_ROOT}/manage.py" shell <<'PY'
+import os
+from pathlib import Path
+
+from accounts.models import User
+from reimbursements.models import ReimbursementReceipt
+
+email = os.environ["SNAPSHOT_ADMIN_EMAIL"].strip().lower()
+password = os.environ["SNAPSHOT_ADMIN_PASSWORD"]
+user, _ = User.objects.get_or_create(email=email)
+user.is_active = True
+user.is_admin = True
+user.set_password(password)
+user.save(update_fields=["is_active", "is_admin", "password", "updated_at"])
+
+missing = []
+for receipt in ReimbursementReceipt.objects.exclude(file_path=""):
+    if not Path(receipt.file_path).is_absolute():
+        from django.conf import settings
+        path = Path(settings.REIMBURSEMENT_RECEIPT_ROOT) / receipt.file_path
+    else:
+        path = Path(receipt.file_path)
+    if not path.is_file():
+        missing.append(f"{receipt.reimbursement.reimbursement_number} receipt {receipt.id}")
+if missing:
+    raise SystemExit("Missing restored reimbursement receipts:\n" + "\n".join(missing))
+PY
+
+  echo
+  echo "Snapshot test server is ready."
+  echo "URL:      http://${LINK_HOST}:${PORT}/login/"
+  echo "Email:    ${SNAPSHOT_ADMIN_EMAIL}"
+  echo "Password: ${SNAPSHOT_ADMIN_PASSWORD}"
+  echo "Database: ${SNAPSHOT_DATABASE}"
+  echo "Config:   ${CONFIG_PATH}"
+  echo
+  exec "${PYTHON}" "${PROJECT_ROOT}/manage.py" runserver "127.0.0.1:${PORT}"
+fi
 
 CONFIG_PATH="${RUNTIME_ROOT}/thephage.toml"
 SQLITE_PATH="${RUNTIME_ROOT}/thephage.sqlite3"
