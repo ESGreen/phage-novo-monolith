@@ -50,6 +50,21 @@ deploy/scripts/runTestServer.sh \
   --clear
 ```
 
+For a quick diagnostic server without local PostgreSQL, use the snapshot's
+Django JSON export and SQLite:
+
+```bash
+deploy/scripts/runTestServer.sh \
+  --snapshot=/absolute/path/snapshot.tar.gz \
+  --use-sqlite \
+  --clear
+```
+
+SQLite mode is convenient for inspecting users, reimbursements, surveys, and
+page behavior. It does not reproduce PostgreSQL locking, constraints, query
+behavior, or performance, so PostgreSQL remains the default and should be used
+for production-fidelity diagnosis.
+
 Snapshot mode:
 
 - Uses an isolated local PostgreSQL database named with the
@@ -62,8 +77,9 @@ Snapshot mode:
 - Verifies that every file-backed reimbursement receipt exists.
 - Binds only to `127.0.0.1`.
 
-Local PostgreSQL defaults to the current operating-system user on
-`127.0.0.1:5432`. Override connection values when needed:
+Local PostgreSQL defaults to the current operating-system user through the
+local Unix socket. Override connection values when TCP or different credentials
+are needed:
 
 ```bash
 THEPHAGE_SNAPSHOT_DB_HOST=127.0.0.1 \

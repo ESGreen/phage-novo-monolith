@@ -15,6 +15,7 @@ CLEAR_RUNTIME=false
 SNAPSHOT_SOURCE=""
 SNAPSHOT_ADMIN_EMAIL="phage@phage.com"
 SNAPSHOT_ADMIN_PASSWORD=""
+USE_SQLITE=false
 for arg in "$@"; do
   case "${arg}" in
     --clear)
@@ -29,12 +30,16 @@ for arg in "$@"; do
     --admin-password=*)
       SNAPSHOT_ADMIN_PASSWORD="${arg#*=}"
       ;;
+    --use-sqlite)
+      USE_SQLITE=true
+      ;;
     --help|-h)
-      echo "Usage: $0 [--clear] [--snapshot=PATH_OR_S3_URI] [--admin-email=EMAIL] [--admin-password=PASSWORD]"
+      echo "Usage: $0 [--clear] [--snapshot=PATH_OR_S3_URI] [--use-sqlite] [--admin-email=EMAIL] [--admin-password=PASSWORD]"
       echo
       echo "Runs a local test server using /tmp/thephage-test-server."
       echo "  --clear  Remove and recreate the local TOML config and SQLite database."
       echo "  --snapshot  Restore a portable production snapshot into local PostgreSQL."
+      echo "  --use-sqlite  Use database.json from a snapshot instead of PostgreSQL."
       exit 0
       ;;
     *)
@@ -44,6 +49,11 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+if [[ "${USE_SQLITE}" == "true" && -z "${SNAPSHOT_SOURCE}" ]]; then
+  echo "--use-sqlite requires --snapshot." >&2
+  exit 1
+fi
 
 RUNTIME_ROOT="/tmp/thephage-test-server"
 HOST="${THEPHAGE_TEST_SERVER_HOST:-127.0.0.1}"
@@ -55,15 +65,17 @@ if [[ -n "${SNAPSHOT_SOURCE}" ]]; then
     echo "Snapshot mode only permits loopback hosts." >&2
     exit 1
   fi
-  for tool in pg_restore createdb dropdb; do
-    if ! command -v "${tool}" >/dev/null 2>&1; then
-      echo "Snapshot mode requires ${tool}." >&2
-      exit 1
-    fi
-  done
+  if [[ "${USE_SQLITE}" != "true" ]]; then
+    for tool in pg_restore createdb dropdb; do
+      if ! command -v "${tool}" >/dev/null 2>&1; then
+        echo "Snapshot mode requires ${tool}. Use --use-sqlite for quick diagnostics." >&2
+        exit 1
+      fi
+    done
+  fi
 
   SNAPSHOT_RUNTIME_ROOT="/tmp/thephage-snapshot-server"
-  DB_HOST="${THEPHAGE_SNAPSHOT_DB_HOST:-127.0.0.1}"
+  DB_HOST="${THEPHAGE_SNAPSHOT_DB_HOST:-}"
   DB_PORT="${THEPHAGE_SNAPSHOT_DB_PORT:-5432}"
   DB_USER="${THEPHAGE_SNAPSHOT_DB_USER:-${USER}}"
   DB_PASSWORD="${THEPHAGE_SNAPSHOT_DB_PASSWORD:-}"
@@ -74,22 +86,38 @@ if [[ -n "${SNAPSHOT_SOURCE}" ]]; then
     rm -rf "${SNAPSHOT_RUNTIME_ROOT}"
   fi
 
-  "${PROJECT_ROOT}/deploy/scripts/restore-thephage" prepare-test-server \
-    --source="${SNAPSHOT_SOURCE}" \
-    --database="${SNAPSHOT_DATABASE}" \
-    --runtime-root="${SNAPSHOT_RUNTIME_ROOT}" \
-    --database-host="${DB_HOST}" \
-    --database-port="${DB_PORT}" \
-    --database-user="${DB_USER}" \
-    --database-password="${DB_PASSWORD}" \
-    --web-port="${PORT}"
+  if [[ "${USE_SQLITE}" == "true" ]]; then
+    "${PROJECT_ROOT}/deploy/scripts/restore-thephage" prepare-sqlite-test-server \
+      --source="${SNAPSHOT_SOURCE}" \
+      --runtime-root="${SNAPSHOT_RUNTIME_ROOT}" \
+      --web-port="${PORT}"
+  else
+    "${PROJECT_ROOT}/deploy/scripts/restore-thephage" prepare-test-server \
+      --source="${SNAPSHOT_SOURCE}" \
+      --database="${SNAPSHOT_DATABASE}" \
+      --runtime-root="${SNAPSHOT_RUNTIME_ROOT}" \
+      --database-host="${DB_HOST}" \
+      --database-port="${DB_PORT}" \
+      --database-user="${DB_USER}" \
+      --database-password="${DB_PASSWORD}" \
+      --web-port="${PORT}"
+  fi
 
   CONFIG_PATH="${SNAPSHOT_RUNTIME_ROOT}/thephage.toml"
   export THEPHAGE_CONFIG="${CONFIG_PATH}"
-  unset THEPHAGE_SQLITE_PATH
-  export PGPASSWORD="${DB_PASSWORD}"
+  if [[ "${USE_SQLITE}" == "true" ]]; then
+    export THEPHAGE_SQLITE_PATH="${SNAPSHOT_RUNTIME_ROOT}/thephage.sqlite3"
+    rm -f "${THEPHAGE_SQLITE_PATH}" "${THEPHAGE_SQLITE_PATH}-shm" "${THEPHAGE_SQLITE_PATH}-wal"
+  else
+    unset THEPHAGE_SQLITE_PATH
+    export PGPASSWORD="${DB_PASSWORD}"
+  fi
 
   "${PYTHON}" "${PROJECT_ROOT}/manage.py" migrate --noinput
+  if [[ "${USE_SQLITE}" == "true" ]]; then
+    "${PYTHON}" "${PROJECT_ROOT}/manage.py" loaddata \
+      "${SNAPSHOT_RUNTIME_ROOT}/restored/database.json"
+  fi
   "${PYTHON}" "${PROJECT_ROOT}/manage.py" collectstatic --noinput
   "${PYTHON}" "${PROJECT_ROOT}/manage.py" check
 
@@ -131,7 +159,11 @@ PY
   echo "URL:      http://${LINK_HOST}:${PORT}/login/"
   echo "Email:    ${SNAPSHOT_ADMIN_EMAIL}"
   echo "Password: ${SNAPSHOT_ADMIN_PASSWORD}"
-  echo "Database: ${SNAPSHOT_DATABASE}"
+  if [[ "${USE_SQLITE}" == "true" ]]; then
+    echo "Database: ${THEPHAGE_SQLITE_PATH} (SQLite diagnostic mode)"
+  else
+    echo "Database: ${SNAPSHOT_DATABASE}"
+  fi
   echo "Config:   ${CONFIG_PATH}"
   echo
   exec "${PYTHON}" "${PROJECT_ROOT}/manage.py" runserver "127.0.0.1:${PORT}"

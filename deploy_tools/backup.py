@@ -226,6 +226,35 @@ def migration_inventory() -> list[str]:
     ]
 
 
+def write_django_data_export(output_path: Path) -> None:
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "thephage.settings")
+
+    import django
+    from django.apps import apps
+    from django.core import serializers
+
+    django.setup()
+    excluded_models = {
+        ("auth", "permission"),
+        ("contenttypes", "contenttype"),
+        ("sessions", "session"),
+    }
+    objects = []
+    for model in apps.get_models():
+        if (model._meta.app_label, model._meta.model_name) in excluded_models:
+            continue
+        objects.extend(model._default_manager.all().iterator())
+    with output_path.open("w", encoding="utf-8") as output_file:
+        serializers.serialize(
+            "json",
+            objects,
+            stream=output_file,
+            use_natural_foreign_keys=True,
+            use_natural_primary_keys=True,
+            indent=2,
+        )
+
+
 def create_portable_snapshot(
     config: ThePhageConfig,
     output_path: Path,
@@ -245,10 +274,12 @@ def create_portable_snapshot(
     ) as temp_dir:
         temp_path = Path(temp_dir)
         database_dump = temp_path / "database.dump"
+        database_json = temp_path / "database.json"
         manifest_path = temp_path / "manifest.json"
         staged_archive = temp_path / "snapshot.tar.gz"
 
         run_pg_command(config, pg_dump_command(config, database_dump))
+        write_django_data_export(database_json)
         manifest = {
             "format": SNAPSHOT_FORMAT,
             "version": SNAPSHOT_VERSION,
@@ -260,6 +291,15 @@ def create_portable_snapshot(
                 "dump_format": "postgres-custom",
                 "size_bytes": database_dump.stat().st_size,
                 "sha256": sha256_file(database_dump),
+            },
+            "database_json": {
+                "size_bytes": database_json.stat().st_size,
+                "sha256": sha256_file(database_json),
+                "excluded_models": [
+                    "auth.permission",
+                    "contenttypes.contenttype",
+                    "sessions.session",
+                ],
             },
             "trees": {
                 "media": tree_inventory(config.paths.media_root),
@@ -273,6 +313,7 @@ def create_portable_snapshot(
 
         with tarfile.open(staged_archive, "w:gz") as tar:
             tar.add(database_dump, arcname=f"{snapshot_name}/database.dump")
+            tar.add(database_json, arcname=f"{snapshot_name}/database.json")
             tar.add(manifest_path, arcname=f"{snapshot_name}/manifest.json")
             add_tree_to_tar(tar, config.paths.media_root, f"{snapshot_name}/media")
             add_tree_to_tar(
@@ -285,6 +326,7 @@ def create_portable_snapshot(
             names = set(tar.getnames())
             required = {
                 f"{snapshot_name}/database.dump",
+                f"{snapshot_name}/database.json",
                 f"{snapshot_name}/manifest.json",
             }
             if not required <= names:

@@ -247,6 +247,11 @@ def test_portable_snapshot_contains_database_media_and_private_receipts(
         Path(file_arg.removeprefix("--file=")).write_bytes(b"database")
 
     monkeypatch.setattr(backup, "run_pg_command", fake_run_pg_command)
+    monkeypatch.setattr(
+        backup,
+        "write_django_data_export",
+        lambda path: path.write_text("[]", encoding="utf-8"),
+    )
     monkeypatch.setattr(backup, "git_commit", lambda app_root: "abc123")
     monkeypatch.setattr(backup, "migration_inventory", lambda: ["a.0001"])
 
@@ -261,6 +266,7 @@ def test_portable_snapshot_contains_database_media_and_private_receipts(
         root = "thephage-snapshot-2026-09-17T120000Z"
         names = set(tar.getnames())
         assert f"{root}/database.dump" in names
+        assert f"{root}/database.json" in names
         assert f"{root}/media/profile.jpg" in names
         assert f"{root}/private/reimbursement-receipts/receipt.pdf" in names
         assert not any("/public/" in name for name in names)
@@ -269,6 +275,7 @@ def test_portable_snapshot_contains_database_media_and_private_receipts(
         manifest = json.load(manifest_file)
         assert manifest["format"] == backup.SNAPSHOT_FORMAT
         assert manifest["git_commit"] == "abc123"
+        assert manifest["database_json"]["size_bytes"] == 2
         assert manifest["trees"]["media"]["file_count"] == 1
         assert manifest["trees"]["reimbursement_receipts"]["file_count"] == 1
         archive_bytes = output_path.read_bytes()
@@ -306,6 +313,23 @@ def test_generated_local_config_uses_restored_paths(tmp_path) -> None:
     assert 'live_secret_key = "disabled"' in config_text
 
 
+def test_generated_local_config_supports_local_postgres_socket(tmp_path) -> None:
+    config_text = restore.generated_local_config(
+        snapshot_root=tmp_path / "restored",
+        runtime_root=tmp_path / "runtime",
+        database="thephage_snapshot_test",
+        host="",
+        port=5432,
+        user="localuser",
+        password="",
+        web_port=8000,
+        timezone="America/Los_Angeles",
+    )
+
+    assert 'host = ""' in config_text
+    assert 'password = "unused-peer-auth"' in config_text
+
+
 def test_portable_restore_command_uses_transactional_safety(tmp_path) -> None:
     command = restore.pg_restore_command("thephage_snapshot_test", tmp_path / "database.dump")
     assert "--exit-on-error" in command
@@ -331,6 +355,11 @@ def test_portable_manifest_detects_tampered_receipt(monkeypatch, tmp_path) -> No
         Path(file_arg.removeprefix("--file=")).write_bytes(b"database")
 
     monkeypatch.setattr(backup, "run_pg_command", fake_run_pg_command)
+    monkeypatch.setattr(
+        backup,
+        "write_django_data_export",
+        lambda path: path.write_text("[]", encoding="utf-8"),
+    )
     monkeypatch.setattr(backup, "git_commit", lambda app_root: "abc123")
     monkeypatch.setattr(backup, "migration_inventory", lambda: ["a.0001"])
     backup.create_portable_snapshot(
@@ -359,6 +388,11 @@ def test_portable_manifest_accepts_valid_snapshot(monkeypatch, tmp_path) -> None
         Path(file_arg.removeprefix("--file=")).write_bytes(b"database")
 
     monkeypatch.setattr(backup, "run_pg_command", fake_run_pg_command)
+    monkeypatch.setattr(
+        backup,
+        "write_django_data_export",
+        lambda path: path.write_text("[]", encoding="utf-8"),
+    )
     monkeypatch.setattr(backup, "git_commit", lambda app_root: "abc123")
     monkeypatch.setattr(backup, "migration_inventory", lambda: ["a.0001"])
     backup.create_portable_snapshot(
@@ -374,6 +408,82 @@ def test_portable_manifest_accepts_valid_snapshot(monkeypatch, tmp_path) -> None
 
     assert manifest["format"] == backup.SNAPSHOT_FORMAT
     assert manifest["trees"]["reimbursement_receipts"]["file_count"] == 1
+
+
+def test_prepare_sqlite_snapshot_generates_isolated_runtime(monkeypatch, tmp_path) -> None:
+    config = configured_snapshot(tmp_path)
+    output_path = tmp_path / "portable.tar.gz"
+
+    def fake_run_pg_command(config, command: list[str]) -> None:
+        file_arg = next(arg for arg in command if arg.startswith("--file="))
+        Path(file_arg.removeprefix("--file=")).write_bytes(b"database")
+
+    monkeypatch.setattr(backup, "run_pg_command", fake_run_pg_command)
+    monkeypatch.setattr(
+        backup,
+        "write_django_data_export",
+        lambda path: path.write_text("[]", encoding="utf-8"),
+    )
+    monkeypatch.setattr(backup, "git_commit", lambda app_root: "abc123")
+    monkeypatch.setattr(backup, "migration_inventory", lambda: ["a.0001"])
+    backup.create_portable_snapshot(
+        config,
+        output_path,
+        "2026-09-17T120000Z",
+        app_root=tmp_path,
+    )
+
+    runtime_root = Path("/tmp/thephage-snapshot-server") / tmp_path.name
+    try:
+        restored_root, config_path, sqlite_path, manifest = restore.prepare_sqlite_snapshot(
+            source=str(output_path),
+            runtime_root=runtime_root,
+            web_port=8123,
+        )
+        assert (restored_root / "database.json").read_text() == "[]"
+        assert config_path.is_file()
+        assert sqlite_path == runtime_root / "thephage.sqlite3"
+        assert manifest["format"] == backup.SNAPSHOT_FORMAT
+    finally:
+        if runtime_root.exists():
+            import shutil
+
+            shutil.rmtree(runtime_root)
+
+
+def test_portable_manifest_allows_missing_json_for_postgres_mode(monkeypatch, tmp_path) -> None:
+    config = configured_snapshot(tmp_path)
+    output_path = tmp_path / "portable.tar.gz"
+
+    def fake_run_pg_command(config, command: list[str]) -> None:
+        file_arg = next(arg for arg in command if arg.startswith("--file="))
+        Path(file_arg.removeprefix("--file=")).write_bytes(b"database")
+
+    monkeypatch.setattr(backup, "run_pg_command", fake_run_pg_command)
+    monkeypatch.setattr(
+        backup,
+        "write_django_data_export",
+        lambda path: path.write_text("[]", encoding="utf-8"),
+    )
+    monkeypatch.setattr(backup, "git_commit", lambda app_root: "abc123")
+    monkeypatch.setattr(backup, "migration_inventory", lambda: ["a.0001"])
+    backup.create_portable_snapshot(
+        config,
+        output_path,
+        "2026-09-17T120000Z",
+        app_root=tmp_path,
+    )
+    extract_root = tmp_path / "extract"
+    restore.safe_extract_tarball(output_path, extract_root)
+    snapshot_root = restore.find_snapshot_root(extract_root)
+    (snapshot_root / "database.json").unlink()
+    manifest = json.loads((snapshot_root / "manifest.json").read_text())
+    manifest.pop("database_json")
+    (snapshot_root / "manifest.json").write_text(json.dumps(manifest))
+
+    restore.load_portable_manifest(snapshot_root)
+    with pytest.raises(SystemExit, match="does not support SQLite mode"):
+        restore.load_portable_manifest(snapshot_root, require_database_json=True)
 
 
 @pytest.mark.parametrize("database", ["thephage", "thephage_prod", "production_snapshot"])

@@ -90,7 +90,11 @@ def find_snapshot_root(destination: Path) -> Path:
     return roots[0]
 
 
-def load_portable_manifest(snapshot_root: Path) -> dict[str, object]:
+def load_portable_manifest(
+    snapshot_root: Path,
+    *,
+    require_database_json: bool = False,
+) -> dict[str, object]:
     manifest_path = snapshot_root / "manifest.json"
     if not manifest_path.is_file():
         raise SystemExit(f"Snapshot is missing manifest: {manifest_path}")
@@ -105,6 +109,19 @@ def load_portable_manifest(snapshot_root: Path) -> dict[str, object]:
         raise SystemExit("Portable snapshot database size does not match manifest")
     if sha256_file(dump_path) != database.get("sha256"):
         raise SystemExit("Portable snapshot database checksum does not match manifest")
+    database_json_path = snapshot_root / "database.json"
+    database_json = manifest.get("database_json", {})
+    if require_database_json and (
+        not database_json_path.is_file() or not isinstance(database_json, dict)
+    ):
+        raise SystemExit("Portable snapshot does not support SQLite mode: database.json is missing")
+    if database_json_path.is_file():
+        if not isinstance(database_json, dict):
+            raise SystemExit("Portable snapshot JSON metadata is invalid")
+        if database_json_path.stat().st_size != database_json.get("size_bytes"):
+            raise SystemExit("Portable snapshot JSON size does not match manifest")
+        if sha256_file(database_json_path) != database_json.get("sha256"):
+            raise SystemExit("Portable snapshot JSON checksum does not match manifest")
     for tree_name, relative_root in (
         ("media", Path("media")),
         ("reimbursement_receipts", Path("private/reimbursement-receipts")),
@@ -251,6 +268,54 @@ def restore_portable_snapshot(
     return restored_root, config_path, manifest
 
 
+def prepare_sqlite_snapshot(
+    *,
+    source: str,
+    runtime_root: Path,
+    web_port: int,
+) -> tuple[Path, Path, Path, dict[str, object]]:
+    runtime_root = runtime_root.resolve()
+    allowed_base = Path("/tmp/thephage-snapshot-server").resolve()
+    if runtime_root != allowed_base and allowed_base not in runtime_root.parents:
+        raise SystemExit(f"Snapshot runtime root must be under {allowed_base}")
+    runtime_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    stage_root = runtime_root.parent / f".{runtime_root.name}-staging"
+    if stage_root.exists():
+        shutil.rmtree(stage_root)
+    stage_root.mkdir(mode=0o700)
+    with tempfile.TemporaryDirectory(prefix="thephage-snapshot-fetch-") as temp_dir:
+        tarball = fetch_source(source, Path(temp_dir))
+        safe_extract_tarball(tarball, stage_root)
+    snapshot_root = find_snapshot_root(stage_root)
+    manifest = load_portable_manifest(snapshot_root, require_database_json=True)
+
+    restored_root = runtime_root / "restored"
+    if restored_root.exists():
+        shutil.rmtree(restored_root)
+    os.replace(snapshot_root, restored_root)
+    shutil.rmtree(stage_root)
+    for directory in ("public", "static", "tmp", "backups"):
+        (runtime_root / directory).mkdir(parents=True, exist_ok=True)
+    sqlite_path = runtime_root / "thephage.sqlite3"
+    config_path = runtime_root / "thephage.toml"
+    config_path.write_text(
+        generated_local_config(
+            snapshot_root=restored_root,
+            runtime_root=runtime_root,
+            database="unused_sqlite_snapshot",
+            host="localhost",
+            port=5432,
+            user="unused",
+            password="unused",
+            web_port=web_port,
+            timezone=str(manifest.get("timezone", "America/Los_Angeles")),
+        ),
+        encoding="utf-8",
+    )
+    os.chmod(config_path, 0o600)
+    return restored_root, config_path, sqlite_path, manifest
+
+
 def restore_local(
     source: str,
     database: str,
@@ -311,6 +376,16 @@ def build_parser() -> argparse.ArgumentParser:
     portable_parser.add_argument("--database-user", required=True)
     portable_parser.add_argument("--database-password", default="")
     portable_parser.add_argument("--web-port", type=int, default=8000)
+    sqlite_parser = subparsers.add_parser(
+        "prepare-sqlite-test-server",
+        help="Extract a portable snapshot for a local SQLite diagnostic server.",
+    )
+    sqlite_parser.add_argument("--source", required=True)
+    sqlite_parser.add_argument(
+        "--runtime-root",
+        default="/tmp/thephage-snapshot-server",
+    )
+    sqlite_parser.add_argument("--web-port", type=int, default=8000)
     restore_parser.add_argument(
         "--restore-root",
         default=str(DEFAULT_RESTORE_ROOT),
@@ -354,6 +429,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"Restored snapshot root: {restored_root}")
         print(f"Generated config: {config_path}")
+        return 0
+    if args.command == "prepare-sqlite-test-server":
+        verify_tools(needs_s3=source_is_s3(args.source))
+        restored_root, config_path, sqlite_path, _manifest = prepare_sqlite_snapshot(
+            source=args.source,
+            runtime_root=Path(args.runtime_root),
+            web_port=args.web_port,
+        )
+        print(f"Restored snapshot root: {restored_root}")
+        print(f"Generated config: {config_path}")
+        print(f"SQLite database: {sqlite_path}")
         return 0
     raise SystemExit(f"Unknown command: {args.command}")
 
