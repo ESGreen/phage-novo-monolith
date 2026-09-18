@@ -120,6 +120,28 @@ def test_migration_inventory_uses_django_loader(mocker) -> None:
     assert inventory == ["content.0001_initial", "reimbursements.0001_initial"]
 
 
+def test_git_commit_uses_app_root_and_is_nonfatal(monkeypatch, tmp_path) -> None:
+    captured = {}
+
+    class Result:
+        returncode = 128
+        stdout = ""
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        return Result()
+
+    monkeypatch.setattr(backup.subprocess, "run", fake_run)
+
+    assert backup.git_commit(tmp_path) == "unknown"
+    assert captured["command"] == ["git", "-C", str(tmp_path), "rev-parse", "HEAD"]
+
+
+def test_app_root_uses_environment(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("THEPHAGE_APP_ROOT", str(tmp_path))
+    assert backup.app_root() == tmp_path.resolve()
+
+
 def test_local_output_must_be_absolute() -> None:
     with pytest.raises(SystemExit) as exc_info:
         backup.validate_local_output_path(Path("b.tar.gz"))

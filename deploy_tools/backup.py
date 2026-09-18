@@ -195,11 +195,20 @@ def add_tree_to_tar(
 def git_commit(app_root: Path) -> str:
     result = subprocess.run(
         ["git", "-C", str(app_root), "rev-parse", "HEAD"],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
-    return result.stdout.strip()
+    if result.returncode != 0:
+        return "unknown"
+    return result.stdout.strip() or "unknown"
+
+
+def app_root() -> Path:
+    configured = os.environ.get("THEPHAGE_APP_ROOT")
+    if configured:
+        return Path(configured).resolve()
+    return Path.cwd().resolve()
 
 
 def migration_inventory() -> list[str]:
@@ -227,7 +236,7 @@ def create_portable_snapshot(
     validate_local_output_path(output_path)
     if output_path.exists():
         raise SystemExit(f"Refusing to overwrite existing snapshot: {output_path}")
-    app_root = app_root or Path(__file__).resolve().parents[1]
+    app_root = app_root or globals()["app_root"]()
     snapshot_name = f"thephage-snapshot-{created_at}"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(

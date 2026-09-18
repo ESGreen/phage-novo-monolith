@@ -3,6 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+export THEPHAGE_APP_ROOT="${APP_ROOT}"
+export PYTHONPATH="${APP_ROOT}${PYTHONPATH:+:${PYTHONPATH}}"
 
 declare -a CANDIDATES=()
 if [[ -n "${THEPHAGE_PYTHON:-}" ]]; then
@@ -17,7 +19,7 @@ CANDIDATES+=("${APP_ROOT}/.venv/bin/python")
 for candidate in "${CANDIDATES[@]}"; do
   if [[ -x "${candidate}" ]]; then
     echo "Using Python: ${candidate}" >&2
-    exec "${candidate}" -m deploy_tools.restore "$@"
+    exec "${candidate}" "${APP_ROOT}/deploy_tools/restore.py" "$@"
   fi
 done
 
