@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 from dataclasses import dataclass
@@ -207,7 +208,7 @@ def migration_inventory(app_root: Path, config_path: Path) -> list[str]:
     env["THEPHAGE_CONFIG"] = str(config_path)
     result = subprocess.run(
         [
-            str(app_root / ".venv" / "bin" / "python"),
+            sys.executable,
             str(app_root / "manage.py"),
             "showmigrations",
             "--plan",

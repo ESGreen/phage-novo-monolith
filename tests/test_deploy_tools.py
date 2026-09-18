@@ -108,6 +108,27 @@ def test_pg_dump_uses_configured_password_in_environment(monkeypatch, tmp_path) 
     assert config.database.password not in command
 
 
+def test_migration_inventory_uses_current_python(monkeypatch, tmp_path) -> None:
+    config = configured_snapshot(tmp_path)
+    captured = {}
+
+    class Result:
+        stdout = "[X] reimbursements.0001_initial\n"
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return Result()
+
+    monkeypatch.setattr(backup.subprocess, "run", fake_run)
+
+    inventory = backup.migration_inventory(tmp_path, config.path)
+
+    assert captured["command"][0] == backup.sys.executable
+    assert captured["command"][1] == str(tmp_path / "manage.py")
+    assert inventory == ["[X] reimbursements.0001_initial"]
+
+
 def test_local_output_must_be_absolute() -> None:
     with pytest.raises(SystemExit) as exc_info:
         backup.validate_local_output_path(Path("b.tar.gz"))
