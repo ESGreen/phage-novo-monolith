@@ -217,51 +217,6 @@ def migration_inventory() -> list[str]:
     ]
 
 
-def local_config_template(config: ThePhageConfig) -> str:
-    timezone = config.site.timezone.replace('"', "")
-    return f'''[site]
-base_url = "http://127.0.0.1:8000"
-secret_key = "GENERATED_BY_LOCAL_RESTORE"
-debug = true
-allowed_hosts = ["127.0.0.1", "localhost", "testserver"]
-timezone = "{timezone}"
-
-[database]
-host = "127.0.0.1"
-port = 5432
-name = "GENERATED_BY_LOCAL_RESTORE"
-user = "GENERATED_BY_LOCAL_RESTORE"
-password = ""
-
-[paths]
-public_root = "GENERATED_BY_LOCAL_RESTORE"
-static_root = "GENERATED_BY_LOCAL_RESTORE"
-media_root = "GENERATED_BY_LOCAL_RESTORE"
-tmp_root = "GENERATED_BY_LOCAL_RESTORE"
-reimbursement_receipt_root = "GENERATED_BY_LOCAL_RESTORE"
-
-[stripe]
-test_secret_key = "sk_test_dummy"
-test_publishable_key = "pk_test_dummy"
-test_webhook_secret = "whsec_test_dummy"
-live_secret_key = "disabled"
-live_publishable_key = "disabled"
-live_webhook_secret = "disabled"
-
-[backups]
-database_backups_enabled = false
-config_backups_enabled = false
-media_backups_enabled = false
-s3_bucket = "disabled"
-s3_prefix = "disabled"
-local_backup_dir = "GENERATED_BY_LOCAL_RESTORE"
-database_retention_days = 0
-config_retention_days = 0
-media_retention_days = 0
-config_paths = []
-'''
-
-
 def create_portable_snapshot(
     config: ThePhageConfig,
     output_path: Path,
@@ -282,11 +237,9 @@ def create_portable_snapshot(
         temp_path = Path(temp_dir)
         database_dump = temp_path / "database.dump"
         manifest_path = temp_path / "manifest.json"
-        config_path = temp_path / "local-config-template.toml"
         staged_archive = temp_path / "snapshot.tar.gz"
 
         run_pg_command(config, pg_dump_command(config, database_dump))
-        config_path.write_text(local_config_template(config), encoding="utf-8")
         manifest = {
             "format": SNAPSHOT_FORMAT,
             "version": SNAPSHOT_VERSION,
@@ -312,10 +265,6 @@ def create_portable_snapshot(
         with tarfile.open(staged_archive, "w:gz") as tar:
             tar.add(database_dump, arcname=f"{snapshot_name}/database.dump")
             tar.add(manifest_path, arcname=f"{snapshot_name}/manifest.json")
-            tar.add(
-                config_path,
-                arcname=f"{snapshot_name}/local-config-template.toml",
-            )
             add_tree_to_tar(tar, config.paths.media_root, f"{snapshot_name}/media")
             add_tree_to_tar(
                 tar,
@@ -328,7 +277,6 @@ def create_portable_snapshot(
             required = {
                 f"{snapshot_name}/database.dump",
                 f"{snapshot_name}/manifest.json",
-                f"{snapshot_name}/local-config-template.toml",
             }
             if not required <= names:
                 raise SystemExit("Portable snapshot verification failed")

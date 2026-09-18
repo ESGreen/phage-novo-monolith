@@ -1,9 +1,30 @@
-#!/usr/bin/env python3
-from pathlib import Path
-import sys
+#!/usr/bin/env bash
+set -euo pipefail
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-from deploy_tools.restore import main
+declare -a CANDIDATES=()
+if [[ -n "${THEPHAGE_PYTHON:-}" ]]; then
+  CANDIDATES+=("${THEPHAGE_PYTHON}")
+fi
+if [[ -n "${THEPHAGE_VENV:-}" ]]; then
+  CANDIDATES+=("${THEPHAGE_VENV}/bin/python")
+fi
+CANDIDATES+=("/opt/thephage/venv/bin/python")
+CANDIDATES+=("${APP_ROOT}/.venv/bin/python")
 
-raise SystemExit(main())
+for candidate in "${CANDIDATES[@]}"; do
+  if [[ -x "${candidate}" ]]; then
+    echo "Using Python: ${candidate}" >&2
+    exec "${candidate}" -m deploy_tools.restore "$@"
+  fi
+done
+
+echo "ERROR: No usable The Phage Python interpreter was found." >&2
+echo "Checked:" >&2
+for candidate in "${CANDIDATES[@]}"; do
+  echo "  ${candidate}" >&2
+done
+echo "Set THEPHAGE_PYTHON or THEPHAGE_VENV, or install /opt/thephage/venv." >&2
+exit 1

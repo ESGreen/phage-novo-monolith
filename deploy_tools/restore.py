@@ -141,6 +141,7 @@ def generated_local_config(
     web_port: int,
     timezone: str,
 ) -> str:
+    config_password = password or "unused-peer-auth"
     return f'''[site]
 base_url = "http://127.0.0.1:{web_port}"
 secret_key = "{secrets.token_urlsafe(48)}"
@@ -153,7 +154,7 @@ host = "{host}"
 port = {port}
 name = "{database}"
 user = "{user}"
-password = "{password}"
+password = "{config_password}"
 
 [paths]
 public_root = "{runtime_root / 'public'}"

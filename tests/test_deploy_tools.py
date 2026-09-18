@@ -249,11 +249,9 @@ def test_portable_snapshot_contains_database_media_and_private_receipts(
         assert manifest["git_commit"] == "abc123"
         assert manifest["trees"]["media"]["file_count"] == 1
         assert manifest["trees"]["reimbursement_receipts"]["file_count"] == 1
-        config_file = tar.extractfile(f"{root}/local-config-template.toml")
-        assert config_file is not None
-        config_text = config_file.read().decode()
-        assert config.database.password not in config_text
-        assert config.stripe.live_secret_key not in config_text
+        archive_bytes = output_path.read_bytes()
+        assert config.database.password.encode() not in archive_bytes
+        assert config.stripe.live_secret_key.encode() not in archive_bytes
 
 
 def test_portable_snapshot_refuses_existing_output(monkeypatch, tmp_path) -> None:
@@ -300,6 +298,60 @@ def test_snapshot_database_name_is_restricted() -> None:
         restore.assert_snapshot_database_name("thephage")
     with pytest.raises(SystemExit):
         restore.assert_snapshot_database_name("postgresql://server/db")
+
+
+def test_portable_manifest_detects_tampered_receipt(monkeypatch, tmp_path) -> None:
+    config = configured_snapshot(tmp_path)
+    output_path = tmp_path / "portable.tar.gz"
+
+    def fake_run_pg_command(config, command: list[str]) -> None:
+        file_arg = next(arg for arg in command if arg.startswith("--file="))
+        Path(file_arg.removeprefix("--file=")).write_bytes(b"database")
+
+    monkeypatch.setattr(backup, "run_pg_command", fake_run_pg_command)
+    monkeypatch.setattr(backup, "git_commit", lambda app_root: "abc123")
+    monkeypatch.setattr(backup, "migration_inventory", lambda: ["a.0001"])
+    backup.create_portable_snapshot(
+        config,
+        output_path,
+        "2026-09-17T120000Z",
+        app_root=tmp_path,
+    )
+
+    extract_root = tmp_path / "extract"
+    restore.safe_extract_tarball(output_path, extract_root)
+    snapshot_root = restore.find_snapshot_root(extract_root)
+    receipt = snapshot_root / "private/reimbursement-receipts/receipt.pdf"
+    receipt.write_bytes(b"tampered")
+
+    with pytest.raises(SystemExit, match="does not match manifest"):
+        restore.load_portable_manifest(snapshot_root)
+
+
+def test_portable_manifest_accepts_valid_snapshot(monkeypatch, tmp_path) -> None:
+    config = configured_snapshot(tmp_path)
+    output_path = tmp_path / "portable.tar.gz"
+
+    def fake_run_pg_command(config, command: list[str]) -> None:
+        file_arg = next(arg for arg in command if arg.startswith("--file="))
+        Path(file_arg.removeprefix("--file=")).write_bytes(b"database")
+
+    monkeypatch.setattr(backup, "run_pg_command", fake_run_pg_command)
+    monkeypatch.setattr(backup, "git_commit", lambda app_root: "abc123")
+    monkeypatch.setattr(backup, "migration_inventory", lambda: ["a.0001"])
+    backup.create_portable_snapshot(
+        config,
+        output_path,
+        "2026-09-17T120000Z",
+        app_root=tmp_path,
+    )
+
+    extract_root = tmp_path / "extract"
+    restore.safe_extract_tarball(output_path, extract_root)
+    manifest = restore.load_portable_manifest(restore.find_snapshot_root(extract_root))
+
+    assert manifest["format"] == backup.SNAPSHOT_FORMAT
+    assert manifest["trees"]["reimbursement_receipts"]["file_count"] == 1
 
 
 @pytest.mark.parametrize("database", ["thephage", "thephage_prod", "production_snapshot"])

@@ -16,6 +16,76 @@ Use this when:
 
 Backups are handled outside the Django web app.
 
+## Portable Diagnostic Snapshot
+
+Use one production command to create a portable snapshot for local diagnosis:
+
+```bash
+sudo -u phage \
+  THEPHAGE_CONFIG=/etc/thephage/thephage.toml \
+  /opt/thephage/app/deploy/scripts/backup-thephage snapshot \
+  --output=/var/backups/thephage/snapshot.tar.gz
+```
+
+The archive contains:
+
+- PostgreSQL database dump.
+- Uploaded media.
+- Private reimbursement receipts.
+- Versioned manifest with file sizes and SHA-256 hashes.
+- Git commit and applied migration inventory.
+
+Public static pages and collected static files are not included. The local test
+server creates a placeholder public directory and runs `collectstatic` from the
+current checkout.
+
+Transfer the snapshot to the development machine through the operator's chosen
+secure method.
+
+On the development machine, restore and run it with one command:
+
+```bash
+deploy/scripts/runTestServer.sh \
+  --snapshot=/absolute/path/snapshot.tar.gz \
+  --clear
+```
+
+Snapshot mode:
+
+- Uses an isolated local PostgreSQL database named with the
+  `thephage_snapshot_` prefix.
+- Restores media and private reimbursement receipts under
+  `/tmp/thephage-snapshot-server`.
+- Generates a random local Django secret and disables live Stripe credentials.
+- Applies migrations, runs Django checks, and collects static files.
+- Creates or resets one local admin account and prints its credentials.
+- Verifies that every file-backed reimbursement receipt exists.
+- Binds only to `127.0.0.1`.
+
+Local PostgreSQL defaults to the current operating-system user on
+`127.0.0.1:5432`. Override connection values when needed:
+
+```bash
+THEPHAGE_SNAPSHOT_DB_HOST=127.0.0.1 \
+THEPHAGE_SNAPSHOT_DB_PORT=5432 \
+THEPHAGE_SNAPSHOT_DB_USER=my_local_user \
+THEPHAGE_SNAPSHOT_DB_PASSWORD=my_local_password \
+deploy/scripts/runTestServer.sh \
+  --snapshot=/absolute/path/snapshot.tar.gz \
+  --clear
+```
+
+Optional local admin overrides:
+
+```text
+--admin-email=person@example.com
+--admin-password=local-password
+```
+
+The snapshot is sensitive even though configuration secrets are omitted. It
+contains member, payment, profile, media, and reimbursement data. Keep it
+private and delete it when investigation is complete.
+
 The web app should not know how to back itself up.
 
 V1 backup tooling uses repo-owned Python utility scripts:
