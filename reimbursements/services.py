@@ -130,6 +130,13 @@ def _require_editable(reimbursement: Reimbursement, requester: User) -> None:
         raise ReimbursementConflictError("This reimbursement is no longer editable.")
 
 
+def _require_admin_editable(reimbursement: Reimbursement, administrator: User) -> None:
+    if not administrator.is_admin:
+        raise ReimbursementConflictError("Admin access is required.")
+    if reimbursement.status != Reimbursement.Status.DRAFT:
+        raise ReimbursementConflictError("Only draft reimbursements can be edited.")
+
+
 def add_file_receipt(
     *,
     reimbursement: Reimbursement,
@@ -171,6 +178,114 @@ def add_file_receipt(
         raise
 
 
+def admin_add_expense(
+    *,
+    reimbursement: Reimbursement,
+    administrator: User,
+    category: ReimbursementExpenseCategory,
+    description: str,
+    amount_cents: int,
+) -> ReimbursementExpense:
+    with transaction.atomic():
+        locked = Reimbursement.objects.select_for_update().get(pk=reimbursement.pk)
+        _require_admin_editable(locked, administrator)
+        expense = ReimbursementExpense(
+            reimbursement=locked,
+            category=category,
+            description=description,
+            amount_cents=amount_cents,
+        )
+        expense.full_clean()
+        expense.save()
+        return expense
+
+
+def admin_delete_expense(
+    *, reimbursement: Reimbursement, administrator: User, expense: ReimbursementExpense
+) -> None:
+    with transaction.atomic():
+        locked = Reimbursement.objects.select_for_update().get(pk=reimbursement.pk)
+        _require_admin_editable(locked, administrator)
+        ReimbursementExpense.objects.filter(pk=expense.pk, reimbursement=locked).delete()
+
+
+def admin_add_file_receipt(
+    *, reimbursement: Reimbursement, administrator: User, uploaded_file, explanation: str = ""
+) -> ReimbursementReceipt:
+    validated = validate_receipt_upload(uploaded_file)
+    relative_path = ""
+    try:
+        with transaction.atomic():
+            locked = Reimbursement.objects.select_for_update().get(pk=reimbursement.pk)
+            _require_admin_editable(locked, administrator)
+            files = locked.receipts.exclude(
+                receipt_type=ReimbursementReceipt.ReceiptType.EXPLANATION
+            )
+            if files.count() >= MAX_RECEIPT_FILES:
+                raise ValidationError("A reimbursement may have at most 20 receipt files.")
+            total_size = files.aggregate(total=Sum("size_bytes"))["total"] or 0
+            if total_size + validated.size_bytes > MAX_RECEIPT_TOTAL_SIZE_BYTES:
+                raise ValidationError("Receipt files may total at most 100 MB.")
+            relative_path = build_receipt_relative_path(locked, validated.extension)
+            store_receipt_file(uploaded_file, relative_path)
+            receipt = ReimbursementReceipt(
+                reimbursement=locked,
+                receipt_type=validated.receipt_type,
+                original_filename=validated.original_filename,
+                file_path=relative_path,
+                content_type=validated.content_type,
+                size_bytes=validated.size_bytes,
+                explanation=explanation.strip(),
+            )
+            receipt.full_clean()
+            receipt.save()
+            return receipt
+    except Exception:
+        if relative_path:
+            delete_receipt_file(relative_path)
+        raise
+
+
+def admin_add_explanation_receipt(
+    *, reimbursement: Reimbursement, administrator: User, explanation: str
+) -> ReimbursementReceipt:
+    with transaction.atomic():
+        locked = Reimbursement.objects.select_for_update().get(pk=reimbursement.pk)
+        _require_admin_editable(locked, administrator)
+        receipt = ReimbursementReceipt(
+            reimbursement=locked,
+            receipt_type=ReimbursementReceipt.ReceiptType.EXPLANATION,
+            explanation=explanation,
+        )
+        receipt.full_clean()
+        receipt.save()
+        return receipt
+
+
+def admin_delete_receipt(
+    *, reimbursement: Reimbursement, administrator: User, receipt: ReimbursementReceipt
+) -> None:
+    with transaction.atomic():
+        locked = Reimbursement.objects.select_for_update().get(pk=reimbursement.pk)
+        _require_admin_editable(locked, administrator)
+        file_path = receipt.file_path
+        receipt.delete()
+        if file_path:
+            transaction.on_commit(lambda: delete_receipt_file(file_path))
+
+
+def admin_submit_reimbursement(
+    *, reimbursement: Reimbursement, administrator: User
+) -> Reimbursement:
+    if not administrator.is_admin:
+        raise ReimbursementConflictError("Admin access is required.")
+    return submit_reimbursement(
+        reimbursement=reimbursement,
+        requester=reimbursement.requester,
+        submitted_by=administrator,
+    )
+
+
 def add_explanation_receipt(
     *, reimbursement: Reimbursement, requester: User, explanation: str
 ) -> ReimbursementReceipt:
@@ -208,7 +323,12 @@ def update_requester_notes(
         return locked
 
 
-def submit_reimbursement(*, reimbursement: Reimbursement, requester: User) -> Reimbursement:
+def submit_reimbursement(
+    *,
+    reimbursement: Reimbursement,
+    requester: User,
+    submitted_by: User | None = None,
+) -> Reimbursement:
     with transaction.atomic():
         locked = Reimbursement.objects.select_for_update().get(pk=reimbursement.pk)
         _require_editable(locked, requester)
@@ -242,7 +362,8 @@ def submit_reimbursement(*, reimbursement: Reimbursement, requester: User) -> Re
         )
         locked.status = Reimbursement.Status.SUBMITTED
         locked.submitted_at = timezone.now()
-        locked.save(update_fields=["status", "submitted_at"])
+        locked.submitted_by = submitted_by or requester
+        locked.save(update_fields=["status", "submitted_at", "submitted_by"])
         return locked
 
 
@@ -258,10 +379,19 @@ def unsubmit_reimbursement(*, reimbursement: Reimbursement, requester: User) -> 
 def _move_to_draft(reimbursement: Reimbursement) -> None:
     reimbursement.status = Reimbursement.Status.DRAFT
     reimbursement.submitted_at = None
+    reimbursement.submitted_by = None
     reimbursement.rejected_at = None
     reimbursement.rejected_by = None
     ReimbursementPayoutSnapshot.objects.filter(reimbursement=reimbursement).delete()
-    reimbursement.save(update_fields=["status", "submitted_at", "rejected_at", "rejected_by"])
+    reimbursement.save(
+        update_fields=[
+            "status",
+            "submitted_at",
+            "submitted_by",
+            "rejected_at",
+            "rejected_by",
+        ]
+    )
 
 
 def return_reimbursement_to_draft(

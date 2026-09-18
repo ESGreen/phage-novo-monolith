@@ -106,6 +106,13 @@ class Reimbursement(models.Model):
     payer_notes = models.TextField(blank=True, max_length=10_000)
     created_at = models.DateTimeField(auto_now_add=True)
     submitted_at = models.DateTimeField(null=True, blank=True)
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="submitted_reimbursements",
+        null=True,
+        blank=True,
+    )
     paid_at = models.DateTimeField(null=True, blank=True)
     paid_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

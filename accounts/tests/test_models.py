@@ -1,7 +1,7 @@
 import pytest
 from django.contrib.auth import authenticate, get_user_model
 
-from accounts.models import MemberProfile
+from accounts.models import MemberProfile, User, create_member_profile
 
 pytestmark = pytest.mark.django_db
 
@@ -49,6 +49,14 @@ def test_profile_is_created_with_user() -> None:
 
     assert isinstance(user.profile, MemberProfile)
     assert user.profile.bio_markdown == ""
+
+
+def test_profile_signal_ignores_raw_fixture_saves() -> None:
+    user = User(email="fixture@example.com")
+
+    create_member_profile(sender=User, instance=user, created=True, raw=True)
+
+    assert not MemberProfile.objects.filter(user__email="fixture@example.com").exists()
 
 
 def test_create_superuser_sets_admin_flag_without_staff_fields() -> None:

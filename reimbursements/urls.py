@@ -52,6 +52,32 @@ urlpatterns = [
     ),
     path(ADMIN_BASE, views.admin_detail, name="admin-detail"),
     path(f"{ADMIN_BASE}notes/", views.admin_save_notes, name="admin-save-notes"),
+    path(
+        f"{ADMIN_BASE}expenses/add/",
+        views.admin_add_expense,
+        name="admin-add-expense",
+    ),
+    path(
+        f"{ADMIN_BASE}expenses/<int:expense_id>/delete/",
+        views.admin_delete_expense,
+        name="admin-delete-expense",
+    ),
+    path(
+        f"{ADMIN_BASE}receipts/upload/",
+        views.admin_upload_receipt,
+        name="admin-upload-receipt",
+    ),
+    path(
+        f"{ADMIN_BASE}receipts/explanation/",
+        views.admin_add_explanation,
+        name="admin-add-explanation",
+    ),
+    path(
+        f"{ADMIN_BASE}receipts/<int:receipt_id>/delete/",
+        views.admin_delete_receipt,
+        name="admin-delete-receipt",
+    ),
+    path(f"{ADMIN_BASE}submit/", views.admin_submit, name="admin-submit"),
     path(f"{ADMIN_BASE}split/", views.admin_split, name="admin-split"),
     path(f"{ADMIN_BASE}pay/", views.admin_pay, name="admin-pay"),
     path(f"{ADMIN_BASE}reject/", views.admin_reject, name="admin-reject"),

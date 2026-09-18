@@ -4,6 +4,7 @@ import csv
 from urllib.parse import quote
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db.models import Sum
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -38,6 +39,9 @@ from .services import (
     add_expense,
     add_explanation_receipt,
     add_file_receipt,
+    admin_add_explanation_receipt,
+    admin_add_file_receipt,
+    admin_submit_reimbursement,
     create_reimbursement_draft,
     delete_expense,
     delete_receipt,
@@ -53,6 +57,15 @@ from .services import (
     update_payer_notes,
     update_requester_notes,
 )
+from .services import (
+    admin_add_expense as add_expense_as_admin,
+)
+from .services import (
+    admin_delete_expense as delete_expense_as_admin,
+)
+from .services import (
+    admin_delete_receipt as delete_receipt_as_admin,
+)
 
 
 def _member_reimbursement(
@@ -63,6 +76,27 @@ def _member_reimbursement(
         camp_year__year=year,
         reimbursement_number=reimbursement_number,
         requester=request.user,
+    )
+
+
+def _redirect_admin_from_member_detail(
+    request: HttpRequest,
+    year: int,
+    reimbursement_number: str,
+) -> HttpResponse | None:
+    if not request.user.is_admin:
+        return None
+    reimbursement = get_object_or_404(
+        Reimbursement,
+        camp_year__year=year,
+        reimbursement_number=reimbursement_number,
+    )
+    if reimbursement.requester_id == request.user.pk:
+        return None
+    return redirect(
+        "reimbursements:admin-detail",
+        year=year,
+        reimbursement_number=reimbursement_number,
     )
 
 
@@ -129,6 +163,9 @@ def member_create(request: HttpRequest, year: int) -> HttpResponse:
 
 @member_required
 def member_detail(request: HttpRequest, year: int, reimbursement_number: str) -> HttpResponse:
+    admin_redirect = _redirect_admin_from_member_detail(request, year, reimbursement_number)
+    if admin_redirect is not None:
+        return admin_redirect
     reimbursement = _member_reimbursement(request, year, reimbursement_number)
     profile = ReimbursementPayoutProfile.objects.filter(user=request.user).first()
     return render(
@@ -394,6 +431,7 @@ def admin_paid_expenses_csv(request: HttpRequest, year: int) -> HttpResponse:
 @admin_required
 def admin_detail(request: HttpRequest, year: int, reimbursement_number: str) -> HttpResponse:
     reimbursement = _admin_reimbursement(year, reimbursement_number)
+    payout_profile = ReimbursementPayoutProfile.objects.filter(user=reimbursement.requester).first()
     categories = (
         reimbursement.expenses.select_related("category")
         .values_list("category__name", flat=True)
@@ -414,6 +452,10 @@ def admin_detail(request: HttpRequest, year: int, reimbursement_number: str) -> 
                 initial={"payer_notes": reimbursement.payer_notes}
             ),
             "split_form": ReimbursementSplitForm(reimbursement=reimbursement),
+            "expense_form": ReimbursementExpenseCreateForm(reimbursement=reimbursement),
+            "upload_form": ReimbursementReceiptUploadForm(),
+            "explanation_form": ReimbursementReceiptExplanationForm(),
+            "requester_payout_profile": payout_profile,
         },
     )
 
@@ -435,6 +477,143 @@ def admin_save_notes(request: HttpRequest, year: int, reimbursement_number: str)
         kwargs={"year": year, "reimbursement_number": reimbursement_number},
     )
     return redirect(f"{detail_url}#notes")
+
+
+@admin_required
+@require_POST
+def admin_add_expense(request: HttpRequest, year: int, reimbursement_number: str) -> HttpResponse:
+    reimbursement = _admin_reimbursement(year, reimbursement_number)
+    form = ReimbursementExpenseCreateForm(request.POST, reimbursement=reimbursement)
+    if form.is_valid():
+        try:
+            add_expense_as_admin(
+                reimbursement=reimbursement,
+                administrator=request.user,
+                category=form.cleaned_data["category"],
+                description=form.cleaned_data["description"],
+                amount_cents=form.amount_cents,
+            )
+            messages.success(request, "Expense added for member.")
+        except (ReimbursementConflictError, ValidationError) as exc:
+            messages.error(request, str(exc))
+    else:
+        messages.error(request, "Fix the expense fields before adding it.")
+    return redirect(
+        f'{reverse("reimbursements:admin-detail", args=[year, reimbursement_number])}#expenses'
+    )
+
+
+@admin_required
+@require_POST
+def admin_delete_expense(
+    request: HttpRequest,
+    year: int,
+    reimbursement_number: str,
+    expense_id: int,
+) -> HttpResponse:
+    reimbursement = _admin_reimbursement(year, reimbursement_number)
+    expense = get_object_or_404(ReimbursementExpense, pk=expense_id, reimbursement=reimbursement)
+    try:
+        delete_expense_as_admin(
+            reimbursement=reimbursement,
+            administrator=request.user,
+            expense=expense,
+        )
+        messages.success(request, "Expense deleted.")
+    except ReimbursementConflictError as exc:
+        messages.error(request, str(exc))
+    return redirect(
+        f'{reverse("reimbursements:admin-detail", args=[year, reimbursement_number])}#expenses'
+    )
+
+
+@admin_required
+@require_POST
+def admin_upload_receipt(
+    request: HttpRequest, year: int, reimbursement_number: str
+) -> HttpResponse:
+    reimbursement = _admin_reimbursement(year, reimbursement_number)
+    form = ReimbursementReceiptUploadForm(request.POST, request.FILES)
+    if form.is_valid():
+        try:
+            admin_add_file_receipt(
+                reimbursement=reimbursement,
+                administrator=request.user,
+                uploaded_file=form.cleaned_data["file"],
+                explanation=form.cleaned_data["explanation"],
+            )
+            messages.success(request, "Receipt uploaded for member.")
+        except Exception as exc:
+            messages.error(request, str(exc))
+    return redirect(
+        f'{reverse("reimbursements:admin-detail", args=[year, reimbursement_number])}#receipts'
+    )
+
+
+@admin_required
+@require_POST
+def admin_add_explanation(
+    request: HttpRequest, year: int, reimbursement_number: str
+) -> HttpResponse:
+    reimbursement = _admin_reimbursement(year, reimbursement_number)
+    form = ReimbursementReceiptExplanationForm(request.POST)
+    if form.is_valid():
+        try:
+            admin_add_explanation_receipt(
+                reimbursement=reimbursement,
+                administrator=request.user,
+                explanation=form.cleaned_data["explanation"],
+            )
+            messages.success(request, "Explanation added for member.")
+        except (ReimbursementConflictError, ValidationError) as exc:
+            messages.error(request, str(exc))
+    return redirect(
+        f'{reverse("reimbursements:admin-detail", args=[year, reimbursement_number])}#receipts'
+    )
+
+
+@admin_required
+@require_POST
+def admin_delete_receipt(
+    request: HttpRequest,
+    year: int,
+    reimbursement_number: str,
+    receipt_id: int,
+) -> HttpResponse:
+    reimbursement = _admin_reimbursement(year, reimbursement_number)
+    receipt = get_object_or_404(ReimbursementReceipt, pk=receipt_id, reimbursement=reimbursement)
+    try:
+        delete_receipt_as_admin(
+            reimbursement=reimbursement,
+            administrator=request.user,
+            receipt=receipt,
+        )
+        messages.success(request, "Receipt deleted.")
+    except ReimbursementConflictError as exc:
+        messages.error(request, str(exc))
+    return redirect(
+        f'{reverse("reimbursements:admin-detail", args=[year, reimbursement_number])}#receipts'
+    )
+
+
+@admin_required
+@require_POST
+def admin_submit(request: HttpRequest, year: int, reimbursement_number: str) -> HttpResponse:
+    reimbursement = _admin_reimbursement(year, reimbursement_number)
+    try:
+        admin_submit_reimbursement(
+            reimbursement=reimbursement,
+            administrator=request.user,
+        )
+        messages.success(request, "Reimbursement submitted for member.")
+    except (ReimbursementConflictError, ValidationError) as exc:
+        messages.error(request, str(exc))
+        return redirect(
+            "reimbursements:admin-detail",
+            year=year,
+            reimbursement_number=reimbursement_number,
+        )
+    return redirect(_admin_year_url(year, "SubmittedReimbursements"))
 
 
 @admin_required

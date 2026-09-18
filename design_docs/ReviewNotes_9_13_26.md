@@ -1140,6 +1140,9 @@ real operational need:
 - The receipt route is year-scoped under the member reimbursement route.
 - Spreadsheet text uses a leading apostrophe for formula-like cells.
 - Reimbursement navigation is deferred until implementation is complete.
+- Admins may edit draft reimbursement expenses and receipt evidence and submit
+  for the requester. Requester notes and payout profiles remain member-owned,
+  and `submitted_by` records who submitted the current version.
 - Expense descriptions are required and use 2,000 characters; notes and receipt
   explanations use 10,000 characters, original filenames 255 characters, and
   individual expenses are capped at $1,000,000.00.

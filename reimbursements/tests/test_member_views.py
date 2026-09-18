@@ -71,6 +71,24 @@ def test_member_cannot_view_other_reimbursement(client):
     assert client.get(url).status_code == 404
 
 
+def test_admin_member_url_redirects_to_admin_detail_for_other_member(client):
+    reimbursement = create_draft()
+    admin = create_user("admin@example.com", admin=True)
+    client.force_login(admin)
+    member_url = reverse(
+        "reimbursements:member-detail",
+        args=[2026, reimbursement.reimbursement_number],
+    )
+
+    response = client.get(member_url)
+
+    assert response.status_code == 302
+    assert response.url == reverse(
+        "reimbursements:admin-detail",
+        args=[2026, reimbursement.reimbursement_number],
+    )
+
+
 def test_member_detail_renders_draft_forms(client):
     reimbursement = create_draft()
     client.force_login(reimbursement.requester)
@@ -132,6 +150,7 @@ def test_full_member_submit_unsubmit_flow(client):
     reimbursement.refresh_from_db()
     assert response.status_code == 302
     assert reimbursement.status == "submitted"
+    assert reimbursement.submitted_by == reimbursement.requester
 
     unsubmit_url = reverse(
         "reimbursements:member-unsubmit",

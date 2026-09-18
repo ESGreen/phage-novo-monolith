@@ -99,6 +99,14 @@ class MemberProfile(models.Model):
 
 
 @receiver(post_save, sender=User)
-def create_member_profile(sender: type[User], instance: User, created: bool, **kwargs: Any) -> None:
+def create_member_profile(
+    sender: type[User],
+    instance: User,
+    created: bool,
+    raw: bool = False,
+    **kwargs: Any,
+) -> None:
+    if raw:
+        return
     if created:
         MemberProfile.objects.get_or_create(user=instance)

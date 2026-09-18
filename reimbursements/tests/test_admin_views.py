@@ -4,7 +4,13 @@ from django.urls import reverse
 
 from reimbursements.models import ReimbursementExpense, ReimbursementExpenseCategory
 
-from .helpers import create_camp_year, create_submitted, create_user
+from .helpers import (
+    add_required_data,
+    create_camp_year,
+    create_draft,
+    create_submitted,
+    create_user,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -63,6 +69,50 @@ def test_admin_detail_renders_submitted_actions(client):
     assert 'class="reimbursement-final-actions"' in content
     assert "I confirm that this reimbursement has been paid" not in content
     assert "Reject" in content
+
+
+def test_admin_can_edit_and_submit_member_draft(client):
+    reimbursement = add_required_data(create_draft())
+    admin = create_user("admin@example.com", admin=True)
+    client.force_login(admin)
+    detail_url = reverse(
+        "reimbursements:admin-detail",
+        args=[2026, reimbursement.reimbursement_number],
+    )
+    response = client.get(detail_url)
+    content = response.content.decode()
+    assert "You are editing this reimbursement for" in content
+    assert "Add Expense" in content
+    assert "Upload Receipt" in content
+    assert "Submit for" in content
+
+    category = reimbursement.expenses.first().category
+    add_url = reverse(
+        "reimbursements:admin-add-expense",
+        args=[2026, reimbursement.reimbursement_number],
+    )
+    client.post(
+        add_url,
+        {"category": category.id, "description": "Admin expense", "amount_dollars": "5.00"},
+    )
+    submit_url = reverse(
+        "reimbursements:admin-submit",
+        args=[2026, reimbursement.reimbursement_number],
+    )
+    client.post(submit_url)
+    reimbursement.refresh_from_db()
+    assert reimbursement.status == "submitted"
+    assert reimbursement.submitted_by == admin
+
+
+def test_non_admin_cannot_use_admin_edit_route(client):
+    reimbursement = create_draft()
+    client.force_login(reimbursement.requester)
+    url = reverse(
+        "reimbursements:admin-submit",
+        args=[2026, reimbursement.reimbursement_number],
+    )
+    assert client.post(url).status_code == 403
 
 
 def test_category_card_create_and_protect_delete(client):

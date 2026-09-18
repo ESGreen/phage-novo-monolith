@@ -75,6 +75,7 @@ Reimbursement
 - payer_notes
 - created_at
 - submitted_at
+- submitted_by
 - paid_at
 - paid_by
 - rejected_at
@@ -788,9 +789,18 @@ Administrators may:
 - Return a submitted or rejected reimbursement to draft.
 - Add or update payer notes.
 - Manage camp-year expense categories.
+- Add and delete expenses and receipt evidence on draft reimbursements.
+- Submit a draft reimbursement for its requester when the requester already has
+  valid payout information.
 
 Administrators may not edit the member's expenses, receipts, requester notes, or
-payout profile on the member's behalf.
+payout profile while the reimbursement is submitted, paid, or rejected.
+
+On a draft reimbursement, admins may manage expenses and receipt evidence but
+may not change the requester, requester notes, or payout profile. Admin
+submission snapshots the requester's payout profile and records the admin in
+`submitted_by`. Member submission records the requester in `submitted_by`.
+Returning to draft clears `submitted_by`.
 
 ## Recording Payment
 

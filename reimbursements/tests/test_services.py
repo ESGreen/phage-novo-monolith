@@ -5,6 +5,8 @@ from django.db.models import ProtectedError
 from reimbursements.models import ReimbursementExpense, ReimbursementPayoutSnapshot
 from reimbursements.services import (
     ReimbursementConflictError,
+    admin_add_expense,
+    admin_submit_reimbursement,
     mark_reimbursement_paid,
     reject_reimbursement,
     return_reimbursement_to_draft,
@@ -121,3 +123,36 @@ def test_split_source_is_protected_from_deletion():
     assert child.split_from_id == reimbursement.id
     with pytest.raises(ProtectedError):
         reimbursement.delete()
+
+
+def test_admin_can_edit_and_submit_member_draft():
+    reimbursement = add_required_data(create_draft())
+    admin = create_user("admin@example.com", admin=True)
+    category = reimbursement.expenses.first().category
+
+    admin_add_expense(
+        reimbursement=reimbursement,
+        administrator=admin,
+        category=category,
+        description="Added by admin",
+        amount_cents=500,
+    )
+    admin_submit_reimbursement(reimbursement=reimbursement, administrator=admin)
+    reimbursement.refresh_from_db()
+
+    assert reimbursement.status == "submitted"
+    assert reimbursement.submitted_by == admin
+    assert reimbursement.expenses.filter(description="Added by admin").exists()
+    assert reimbursement.payout_snapshot.zelle_email == reimbursement.requester.email
+
+
+def test_return_to_draft_clears_submitted_by():
+    reimbursement = create_submitted()
+    admin = create_user("admin@example.com", admin=True)
+    assert reimbursement.submitted_by == reimbursement.requester
+
+    return_reimbursement_to_draft(reimbursement=reimbursement, administrator=admin)
+    reimbursement.refresh_from_db()
+
+    assert reimbursement.status == "draft"
+    assert reimbursement.submitted_by is None
