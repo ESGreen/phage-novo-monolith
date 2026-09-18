@@ -6,7 +6,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 import tarfile
 import tempfile
 from dataclasses import dataclass
@@ -203,22 +202,19 @@ def git_commit(app_root: Path) -> str:
     return result.stdout.strip()
 
 
-def migration_inventory(app_root: Path, config_path: Path) -> list[str]:
-    env = os.environ.copy()
-    env["THEPHAGE_CONFIG"] = str(config_path)
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(app_root / "manage.py"),
-            "showmigrations",
-            "--plan",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+def migration_inventory() -> list[str]:
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "thephage.settings")
+
+    import django
+    from django.db import connections
+    from django.db.migrations.loader import MigrationLoader
+
+    django.setup()
+    loader = MigrationLoader(connections["default"], ignore_no_migrations=True)
+    return [
+        f"{app_label}.{migration_name}"
+        for app_label, migration_name in sorted(loader.applied_migrations)
+    ]
 
 
 def local_config_template(config: ThePhageConfig) -> str:
@@ -309,7 +305,7 @@ def create_portable_snapshot(
                     config.paths.reimbursement_receipt_root
                 ),
             },
-            "migrations": migration_inventory(app_root, config.path),
+            "migrations": migration_inventory(),
         }
         write_json(manifest_path, manifest)
 

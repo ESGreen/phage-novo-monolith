@@ -108,25 +108,16 @@ def test_pg_dump_uses_configured_password_in_environment(monkeypatch, tmp_path) 
     assert config.database.password not in command
 
 
-def test_migration_inventory_uses_current_python(monkeypatch, tmp_path) -> None:
-    config = configured_snapshot(tmp_path)
-    captured = {}
+def test_migration_inventory_uses_django_loader(mocker) -> None:
+    loader = mocker.patch("django.db.migrations.loader.MigrationLoader")
+    loader.return_value.applied_migrations = {
+        ("content", "0001_initial"),
+        ("reimbursements", "0001_initial"),
+    }
 
-    class Result:
-        stdout = "[X] reimbursements.0001_initial\n"
+    inventory = backup.migration_inventory()
 
-    def fake_run(command, **kwargs):
-        captured["command"] = command
-        captured["kwargs"] = kwargs
-        return Result()
-
-    monkeypatch.setattr(backup.subprocess, "run", fake_run)
-
-    inventory = backup.migration_inventory(tmp_path, config.path)
-
-    assert captured["command"][0] == backup.sys.executable
-    assert captured["command"][1] == str(tmp_path / "manage.py")
-    assert inventory == ["[X] reimbursements.0001_initial"]
+    assert inventory == ["content.0001_initial", "reimbursements.0001_initial"]
 
 
 def test_local_output_must_be_absolute() -> None:
@@ -235,7 +226,7 @@ def test_portable_snapshot_contains_database_media_and_private_receipts(
 
     monkeypatch.setattr(backup, "run_pg_command", fake_run_pg_command)
     monkeypatch.setattr(backup, "git_commit", lambda app_root: "abc123")
-    monkeypatch.setattr(backup, "migration_inventory", lambda app_root, config_path: ["[X] a.0001"])
+    monkeypatch.setattr(backup, "migration_inventory", lambda: ["a.0001"])
 
     backup.create_portable_snapshot(
         config,
